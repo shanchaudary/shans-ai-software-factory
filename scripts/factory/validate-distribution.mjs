@@ -29,10 +29,18 @@ export function validateWorkflowText(path, text) {
 await main(async () => {
   const workflows = (await filesBelow(".github/workflows")).filter((path) => /\.ya?ml$/.test(path));
   invariant(workflows.length >= 3, "DISTRIBUTION_INCOMPLETE", "Expected factory CI and both reusable workflows");
+  const consumerWorkflows = (await filesBelow("templates/consumer/.github/workflows")).filter((path) => /\.ya?ml$/.test(path));
+  invariant(consumerWorkflows.length >= 2, "DISTRIBUTION_INCOMPLETE", "Expected both consumer workflow templates");
   const lintWorkflow = await createLinter();
   for (const path of workflows) {
     const text = await readFile(path, "utf8");
     validateWorkflowText(path, text);
+    const findings = lintWorkflow(text, path);
+    invariant(findings.length === 0, "INVALID_WORKFLOW", `${path} failed Actionlint validation`, findings);
+  }
+  for (const path of consumerWorkflows) {
+    const text = await readFile(path, "utf8");
+    validateWorkflowText(path, text.replaceAll("REPLACE_WITH_FULL_FACTORY_COMMIT_SHA", "0".repeat(40)));
     const findings = lintWorkflow(text, path);
     invariant(findings.length === 0, "INVALID_WORKFLOW", `${path} failed Actionlint validation`, findings);
   }

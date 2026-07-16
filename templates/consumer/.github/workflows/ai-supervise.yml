@@ -9,7 +9,7 @@ on:
       ci_run_id:
         description: Existing completed consumer CI workflow run ID
         required: true
-        type: number
+        type: string
 
 jobs:
   supervise:
@@ -21,7 +21,7 @@ jobs:
       statuses: write
     uses: shanchaudary/shans-ai-software-factory/.github/workflows/reusable-supervise.yml@REPLACE_WITH_FULL_FACTORY_COMMIT_SHA
     with:
-      ci_run_id: ${{ github.event_name == 'workflow_dispatch' && inputs.ci_run_id || github.event.workflow_run.id }}
+      ci_run_id: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.ci_run_id) || github.event.workflow_run.id }}
       factory_ref: REPLACE_WITH_FULL_FACTORY_COMMIT_SHA
     secrets:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

@@ -8,7 +8,7 @@ on:
       issue_number:
         description: Existing authorized issue number
         required: true
-        type: number
+        type: string
 
 jobs:
   implement:
@@ -21,7 +21,7 @@ jobs:
       statuses: write
     uses: shanchaudary/shans-ai-software-factory/.github/workflows/reusable-implement.yml@REPLACE_WITH_FULL_FACTORY_COMMIT_SHA
     with:
-      issue_number: ${{ github.event_name == 'workflow_dispatch' && inputs.issue_number || github.event.issue.number }}
+      issue_number: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.issue_number) || github.event.issue.number }}
       factory_ref: REPLACE_WITH_FULL_FACTORY_COMMIT_SHA
     secrets:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
