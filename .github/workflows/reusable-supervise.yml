@@ -1,0 +1,568 @@
+name: Reusable AI CI and review supervisor
+
+on:
+  workflow_call:
+    inputs:
+      ci_run_id:
+        description: Completed consumer CI workflow run ID
+        required: true
+        type: number
+      factory_ref:
+        description: Full commit SHA pinning this workflow and its runtime
+        required: true
+        type: string
+    secrets:
+      OPENAI_API_KEY:
+        required: true
+      ZAI_API_KEY:
+        required: true
+
+concurrency:
+  group: ai-factory-supervise-${{ github.repository }}-${{ github.event.workflow_run.head_branch || inputs.ci_run_id }}
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    name: Resolve managed PR and exact CI evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      action: ${{ steps.resolve.outputs.action }}
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
+      issue_number: ${{ steps.resolve.outputs.issue_number }}
+      head_sha: ${{ steps.resolve.outputs.head_sha }}
+      head_branch: ${{ steps.resolve.outputs.head_branch }}
+      base_sha: ${{ steps.resolve.outputs.base_sha }}
+      ci_conclusion: ${{ steps.resolve.outputs.ci_conclusion }}
+      attempt: ${{ steps.resolve.outputs.attempt }}
+      next_attempt: ${{ steps.resolve.outputs.next_attempt }}
+      reason: ${{ steps.resolve.outputs.reason }}
+      max_repair_cycles: ${{ steps.config.outputs.max_repair_cycles }}
+    env:
+      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_CONFIG: .ai-factory/project.json
+      FACTORY_CONTEXT_OUTPUT: ${{ runner.temp }}/factory-supervision-context.json
+    steps:
+      - name: Checkout trusted consumer default branch
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Checkout pinned factory runtime
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          repository: shanchaudary/shans-ai-software-factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-source
+          persist-credentials: false
+
+      - name: Isolate and verify factory runtime
+        env:
+          EXPECTED_FACTORY_REF: ${{ inputs.factory_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_FACTORY_REF" =~ ^[0-9a-f]{40}$ ]]
+          actual="$(git -C .factory-source rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_FACTORY_REF"
+          mkdir -p "$FACTORY_RUNTIME"
+          cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
+          rm -rf .factory-source
+
+      - name: Validate consumer contract
+        id: config
+        run: node "$FACTORY_RUNTIME/validate-config.mjs"
+
+      - name: Resolve only a strictly managed same-repository PR
+        id: resolve
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FACTORY_RUN_ID: ${{ inputs.ci_run_id }}
+        run: node "$FACTORY_RUNTIME/resolve-managed-pr.mjs"
+
+      - name: Collect every failed-job log without truncation
+        if: ${{ steps.resolve.outputs.action == 'repair-ci' || steps.resolve.outputs.action == 'block' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FACTORY_RUN_ID: ${{ inputs.ci_run_id }}
+          FACTORY_CONTEXT_PATH: ${{ runner.temp }}/factory-supervision-context.json
+          FACTORY_EVIDENCE_OUTPUT: ${{ runner.temp }}/factory-ci-evidence.json
+        run: node "$FACTORY_RUNTIME/collect-ci-evidence.mjs"
+
+      - name: Upload immutable supervision context
+        if: ${{ steps.resolve.outputs.action != 'ignore' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: factory-context-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: ${{ runner.temp }}/factory-supervision-context.json
+
+      - name: Upload complete failed-CI evidence
+        if: ${{ steps.resolve.outputs.action == 'repair-ci' || steps.resolve.outputs.action == 'block' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: factory-ci-evidence-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: ${{ runner.temp }}/factory-ci-evidence.json
+
+  review:
+    name: Complete independent GLM review
+    needs: inspect
+    if: ${{ needs.inspect.outputs.action == 'review' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    outputs:
+      verdict: ${{ steps.glm.outputs.verdict }}
+      blocking_count: ${{ steps.glm.outputs.blocking_count }}
+    env:
+      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_CONFIG: .ai-factory/project.json
+      FACTORY_CONTEXT_PATH: ${{ runner.temp }}/factory-context/factory-supervision-context.json
+      FACTORY_REVIEW_DIRECTORY: ${{ runner.temp }}/factory-review
+      FACTORY_REVIEW_OUTPUT: ${{ runner.temp }}/factory-review-report.json
+    steps:
+      - name: Checkout exact CI-tested PR head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          ref: ${{ needs.inspect.outputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout pinned factory runtime
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          repository: shanchaudary/shans-ai-software-factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-source
+          persist-credentials: false
+
+      - name: Isolate and verify factory runtime
+        env:
+          EXPECTED_FACTORY_REF: ${{ inputs.factory_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_FACTORY_REF" =~ ^[0-9a-f]{40}$ ]]
+          actual="$(git -C .factory-source rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_FACTORY_REF"
+          mkdir -p "$FACTORY_RUNTIME"
+          cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
+          rm -rf .factory-source
+
+      - name: Download immutable supervision context
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-context-${{ github.run_id }}
+          path: ${{ runner.temp }}/factory-context
+
+      - name: Reject manual governance, config, binary, or submodule changes
+        env:
+          FACTORY_BASE_SHA: ${{ needs.inspect.outputs.base_sha }}
+          FACTORY_HEAD_SHA: ${{ needs.inspect.outputs.head_sha }}
+        run: node "$FACTORY_RUNTIME/validate-managed-diff.mjs"
+
+      - name: Validate consumer contract
+        run: node "$FACTORY_RUNTIME/validate-config.mjs"
+
+      - name: Split the entire diff into checksummed review batches
+        env:
+          FACTORY_BASE_SHA: ${{ needs.inspect.outputs.base_sha }}
+          FACTORY_HEAD_SHA: ${{ needs.inspect.outputs.head_sha }}
+        run: node "$FACTORY_RUNTIME/prepare-review-batches.mjs"
+
+      - name: Review every exact diff segment with GLM
+        id: glm
+        env:
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+        run: node "$FACTORY_RUNTIME/glm-review.mjs"
+
+      - name: Upload independent review evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: factory-review-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: ${{ runner.temp }}/factory-review-report.json
+
+  repair_engineer:
+    name: Isolated Codex repair
+    needs: [inspect, review]
+    if: >-
+      ${{ always() && needs.inspect.result == 'success' &&
+          (needs.inspect.outputs.action == 'repair-ci' ||
+           (needs.inspect.outputs.action == 'review' && needs.review.result == 'success' &&
+            needs.review.outputs.verdict == 'blocking' &&
+            fromJSON(needs.inspect.outputs.attempt) < fromJSON(needs.inspect.outputs.max_repair_cycles))) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.mode.outputs.value }}
+    env:
+      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_CONFIG: .ai-factory/project.json
+      FACTORY_CONTEXT_PATH: ${{ runner.temp }}/factory-context/factory-supervision-context.json
+      FACTORY_PATCH_PATH: ${{ runner.temp }}/factory.patch
+      FACTORY_MANIFEST_PATH: ${{ runner.temp }}/factory-patch-manifest.json
+    steps:
+      - name: Select bounded repair mode
+        id: mode
+        env:
+          INSPECT_ACTION: ${{ needs.inspect.outputs.action }}
+        run: |
+          set -euo pipefail
+          if [ "$INSPECT_ACTION" = "repair-ci" ]; then
+            echo "value=repair-ci" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=repair-review" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout exact current PR head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          ref: ${{ needs.inspect.outputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout pinned factory runtime
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          repository: shanchaudary/shans-ai-software-factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-source
+          persist-credentials: false
+
+      - name: Isolate and verify factory runtime
+        env:
+          EXPECTED_FACTORY_REF: ${{ inputs.factory_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_FACTORY_REF" =~ ^[0-9a-f]{40}$ ]]
+          actual="$(git -C .factory-source rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_FACTORY_REF"
+          mkdir -p "$FACTORY_RUNTIME"
+          cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
+          rm -rf .factory-source
+
+      - name: Download immutable supervision context
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-context-${{ github.run_id }}
+          path: ${{ runner.temp }}/factory-context
+
+      - name: Download complete CI evidence
+        if: ${{ steps.mode.outputs.value == 'repair-ci' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-ci-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/factory-evidence
+
+      - name: Download complete GLM findings
+        if: ${{ steps.mode.outputs.value == 'repair-review' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-review-${{ github.run_id }}
+          path: ${{ runner.temp }}/factory-review-result
+
+      - name: Reject manual governance, config, binary, or submodule changes
+        env:
+          FACTORY_BASE_SHA: ${{ needs.inspect.outputs.base_sha }}
+          FACTORY_HEAD_SHA: ${{ needs.inspect.outputs.head_sha }}
+        run: node "$FACTORY_RUNTIME/validate-managed-diff.mjs"
+
+      - name: Validate consumer contract
+        id: config
+        run: node "$FACTORY_RUNTIME/validate-config.mjs"
+
+      - name: Create isolated setup, model, and verification identities
+        run: |
+          set -euo pipefail
+          sudo groupadd factorywork
+          sudo useradd --create-home --shell /bin/bash --gid factorywork factorysetup
+          sudo useradd --create-home --shell /bin/bash --gid factorywork factorycodex
+          sudo useradd --create-home --shell /bin/bash --gid factorywork factoryverify
+          sudo chgrp -R factorywork "$GITHUB_WORKSPACE"
+          sudo chmod -R g+rwX "$GITHUB_WORKSPACE"
+          sudo chmod -R g-w "$GITHUB_WORKSPACE/.git"
+          sudo find "$GITHUB_WORKSPACE" -path "$GITHUB_WORKSPACE/.git" -prune -o -type d -exec chmod g+s {} +
+
+      - name: Run project setup before model credentials exist
+        env:
+          FACTORY_COMMAND_PHASE: setup
+          FACTORY_COMMAND_USER: factorysetup
+          FACTORY_COMMAND_REPORT: ${{ runner.temp }}/factory-setup-report.json
+        run: node "$FACTORY_RUNTIME/run-project-commands.mjs"
+
+      - name: Require side-effect-free project setup
+        run: node "$FACTORY_RUNTIME/assert-clean.mjs"
+
+      - name: Build CI repair prompt
+        if: ${{ steps.mode.outputs.value == 'repair-ci' }}
+        env:
+          FACTORY_MODE: repair-ci
+          FACTORY_EXPECTED_HEAD: ${{ needs.inspect.outputs.head_sha }}
+          FACTORY_ATTEMPT: ${{ needs.inspect.outputs.next_attempt }}
+          FACTORY_EVIDENCE_PATH: ${{ runner.temp }}/factory-evidence/factory-ci-evidence.json
+          FACTORY_EVIDENCE_MODEL_PATH: .git/factory-ci-evidence.json
+          FACTORY_PROMPT_OUTPUT: .git/factory-prompt.md
+        run: |
+          cp "$FACTORY_EVIDENCE_PATH" .git/factory-ci-evidence.json
+          node "$FACTORY_RUNTIME/build-prompt.mjs"
+          sudo chgrp factorywork .git/factory-prompt.md .git/factory-ci-evidence.json
+          sudo chmod 0640 .git/factory-prompt.md .git/factory-ci-evidence.json
+
+      - name: Build independent-review repair prompt
+        if: ${{ steps.mode.outputs.value == 'repair-review' }}
+        env:
+          FACTORY_MODE: repair-review
+          FACTORY_EXPECTED_HEAD: ${{ needs.inspect.outputs.head_sha }}
+          FACTORY_ATTEMPT: ${{ needs.inspect.outputs.next_attempt }}
+          FACTORY_FINDINGS_PATH: ${{ runner.temp }}/factory-review-result/factory-review-report.json
+          FACTORY_FINDINGS_MODEL_PATH: .git/factory-review-findings.json
+          FACTORY_PROMPT_OUTPUT: .git/factory-prompt.md
+        run: |
+          cp "$FACTORY_FINDINGS_PATH" .git/factory-review-findings.json
+          node "$FACTORY_RUNTIME/build-prompt.mjs"
+          sudo chgrp factorywork .git/factory-prompt.md .git/factory-review-findings.json
+          sudo chmod 0640 .git/factory-prompt.md .git/factory-review-findings.json
+
+      - name: Run pinned Codex repair engine
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
+        env:
+          GIT_OPTIONAL_LOCKS: "0"
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          safety-strategy: unprivileged-user
+          codex-user: factorycodex
+          prompt-file: .git/factory-prompt.md
+          model: ${{ steps.config.outputs.codex_model }}
+          effort: ${{ steps.config.outputs.codex_effort }}
+          codex-version: 0.144.5
+          allow-bot-users: github-actions
+
+      - name: Run authoritative project verification
+        env:
+          FACTORY_COMMAND_PHASE: verify
+          FACTORY_COMMAND_USER: factoryverify
+          FACTORY_COMMAND_REPORT: ${{ runner.temp }}/factory-verification-report.json
+        run: node "$FACTORY_RUNTIME/run-project-commands.mjs"
+
+      - name: Capture and validate immutable repair patch
+        env:
+          FACTORY_PATCH_MODE: capture
+          FACTORY_EXPECTED_HEAD: ${{ needs.inspect.outputs.head_sha }}
+        run: node "$FACTORY_RUNTIME/validate-patch.mjs"
+
+      - name: Upload repair evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: factory-repair-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/factory.patch
+            ${{ runner.temp }}/factory-patch-manifest.json
+            ${{ runner.temp }}/factory-setup-report.json
+            ${{ runner.temp }}/factory-verification-report.json
+
+  publish_repair:
+    name: Validated repair publication and CI redispatch
+    needs: [inspect, repair_engineer]
+    if: ${{ needs.repair_engineer.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: write
+      contents: write
+      issues: write
+      pull-requests: write
+      statuses: write
+    env:
+      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_CONFIG: .ai-factory/project.json
+      FACTORY_CONTEXT_PATH: ${{ runner.temp }}/factory-context/factory-supervision-context.json
+      FACTORY_PATCH_PATH: ${{ runner.temp }}/factory-repair/factory.patch
+      FACTORY_MANIFEST_PATH: ${{ runner.temp }}/factory-repair/factory-patch-manifest.json
+    steps:
+      - name: Checkout exact pre-repair PR head with publisher credentials
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          ref: ${{ needs.inspect.outputs.head_sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Checkout pinned factory runtime
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          repository: shanchaudary/shans-ai-software-factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-source
+          persist-credentials: false
+
+      - name: Isolate and verify factory runtime
+        env:
+          EXPECTED_FACTORY_REF: ${{ inputs.factory_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_FACTORY_REF" =~ ^[0-9a-f]{40}$ ]]
+          actual="$(git -C .factory-source rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_FACTORY_REF"
+          mkdir -p "$FACTORY_RUNTIME"
+          cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
+          rm -rf .factory-source
+
+      - name: Download immutable supervision context
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-context-${{ github.run_id }}
+          path: ${{ runner.temp }}/factory-context
+
+      - name: Download immutable repair artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-repair-${{ github.run_id }}
+          path: ${{ runner.temp }}/factory-repair
+
+      - name: Revalidate and apply repair in fresh publisher job
+        env:
+          FACTORY_PATCH_MODE: apply
+          FACTORY_EXPECTED_HEAD: ${{ needs.inspect.outputs.head_sha }}
+        run: node "$FACTORY_RUNTIME/validate-patch.mjs"
+
+      - name: Publish repair and explicitly redispatch consumer CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FACTORY_PUBLISH_MODE: ${{ needs.repair_engineer.outputs.mode }}
+          FACTORY_EXPECTED_HEAD: ${{ needs.inspect.outputs.head_sha }}
+          FACTORY_BRANCH: ${{ needs.inspect.outputs.head_branch }}
+          FACTORY_PR_NUMBER: ${{ needs.inspect.outputs.pr_number }}
+          FACTORY_ATTEMPT: ${{ needs.inspect.outputs.next_attempt }}
+        run: node "$FACTORY_RUNTIME/publish.mjs"
+
+  ready:
+    name: Record human-gated ready state
+    needs: [inspect, review]
+    if: ${{ needs.review.result == 'success' && needs.review.outputs.verdict == 'clear' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      statuses: write
+    env:
+      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_CONFIG: .ai-factory/project.json
+      FACTORY_CONTEXT_PATH: ${{ runner.temp }}/factory-context/factory-supervision-context.json
+      FACTORY_REVIEW_PATH: ${{ runner.temp }}/factory-review-result/factory-review-report.json
+    steps:
+      - name: Checkout exact reviewed PR head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          ref: ${{ needs.inspect.outputs.head_sha }}
+          persist-credentials: false
+      - name: Checkout pinned factory runtime
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          repository: shanchaudary/shans-ai-software-factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-source
+          persist-credentials: false
+      - name: Isolate runtime
+        env:
+          EXPECTED_FACTORY_REF: ${{ inputs.factory_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_FACTORY_REF" =~ ^[0-9a-f]{40}$ ]]
+          actual="$(git -C .factory-source rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_FACTORY_REF"
+          mkdir -p "$FACTORY_RUNTIME"
+          cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
+          rm -rf .factory-source
+      - name: Download supervision context
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-context-${{ github.run_id }}
+          path: ${{ runner.temp }}/factory-context
+      - name: Download independent review
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-review-${{ github.run_id }}
+          path: ${{ runner.temp }}/factory-review-result
+      - name: Publish evidence-backed ready state
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FACTORY_FINALIZE_MODE: ready
+        run: node "$FACTORY_RUNTIME/finalize.mjs"
+
+  block:
+    name: Record fail-closed human intervention state
+    needs: [inspect, review, repair_engineer, publish_repair]
+    if: >-
+      ${{ always() && needs.inspect.result == 'success' && needs.inspect.outputs.action != 'ignore' &&
+          (needs.inspect.outputs.action == 'block' ||
+           (needs.inspect.outputs.action == 'review' && needs.review.result == 'failure') ||
+           needs.repair_engineer.result == 'failure' ||
+           needs.publish_repair.result == 'failure' ||
+           (needs.inspect.outputs.action == 'review' && needs.review.outputs.verdict == 'blocking' &&
+            fromJSON(needs.inspect.outputs.attempt) >= fromJSON(needs.inspect.outputs.max_repair_cycles))) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      statuses: write
+    env:
+      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_CONFIG: .ai-factory/project.json
+      FACTORY_CONTEXT_PATH: ${{ runner.temp }}/factory-context/factory-supervision-context.json
+    steps:
+      - name: Checkout exact last known PR head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          ref: ${{ needs.inspect.outputs.head_sha }}
+          persist-credentials: false
+      - name: Checkout pinned factory runtime
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          repository: shanchaudary/shans-ai-software-factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-source
+          persist-credentials: false
+      - name: Isolate runtime
+        env:
+          EXPECTED_FACTORY_REF: ${{ inputs.factory_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_FACTORY_REF" =~ ^[0-9a-f]{40}$ ]]
+          actual="$(git -C .factory-source rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_FACTORY_REF"
+          mkdir -p "$FACTORY_RUNTIME"
+          cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
+          rm -rf .factory-source
+      - name: Download supervision context
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-context-${{ github.run_id }}
+          path: ${{ runner.temp }}/factory-context
+      - name: Publish fail-closed state
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FACTORY_FINALIZE_MODE: block
+          FACTORY_BLOCK_REASON: >-
+            Factory stopped without inferring success. inspect=${{ needs.inspect.outputs.action }},
+            review=${{ needs.review.result }}/${{ needs.review.outputs.verdict }},
+            repair=${{ needs.repair_engineer.result }}, publish=${{ needs.publish_repair.result }}.
+            Inspect the failed job logs and retained evidence.
+        run: node "$FACTORY_RUNTIME/finalize.mjs"

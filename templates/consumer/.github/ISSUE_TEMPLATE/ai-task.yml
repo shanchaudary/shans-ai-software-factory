@@ -1,0 +1,49 @@
+name: AI factory engineering task
+description: Material, testable production change for the supervised factory
+title: "[AI] "
+labels: ["ai:risk:yellow"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Complete this contract before an allowed actor adds `ai:build`. Adding `ai:build` is the authorization event. Black-risk work is rejected.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and user impact
+      description: Describe the production problem, affected users, current behavior, and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Required end-to-end behavior
+      description: State the full behavior, integrations, persistence, error paths, compatibility, and operational expectations.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List objective checks that prove the real implementation is complete.
+      placeholder: |
+        - [ ] Real production path is wired from entry point through persistence/integrations
+        - [ ] Failure and retry behavior is covered
+        - [ ] Tests fail before and pass after the change
+        - [ ] Existing callers remain compatible or are migrated
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Explicit non-goals and protected behavior
+      description: Identify what must not change, including data, APIs, security controls, and deployment behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Reproduction and evidence
+      description: Provide logs, traces, screenshots, datasets, commands, or linked specifications needed to verify the issue.
+    validations:
+      required: true
