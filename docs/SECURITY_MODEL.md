@@ -15,7 +15,7 @@
 
 - `OPENAI_API_KEY` exists only as an input to the pinned official Codex action. The action proxies the Responses API and removes the upstream key from the model process environment.
 - Setup, Codex, and verification run under three different unprivileged Linux users. Untrusted project commands never execute as the runner identity that owns the workflow.
-- `ZAI_API_KEY` exists only on the single immutable GLM runtime step. That job never executes consumer commands.
+- `ZAI_API_KEY` exists only on the single immutable GLM runtime step. The runner invokes an exactly pinned OpenCode binary as the dedicated `factoryglm` user, passes no GitHub token, denies all model tools, disables sharing/plugins/MCP/updates/compaction, and gives that user no read access to the consumer checkout. That job never executes consumer commands.
 - Publisher jobs receive no model keys and never run setup, tests, builds, hooks, or consumer executables.
 - The central repository stores no consumer secrets. GitHub does not pass secrets from the factory repository into callers.
 
@@ -24,6 +24,7 @@
 - Every third-party action is pinned to a 40-character commit SHA.
 - The caller pins the reusable workflow and passes the identical full SHA. Each privileged job verifies the checked-out runtime commit before execution.
 - Codex CLI is pinned to `0.144.5`; upgrades require a factory change and tests.
+- The OpenCode Linux baseline reviewer binary is package-lock integrity checked and pinned to `1.18.2`; install scripts are disabled and the workflow verifies the binary version before any model secret exists.
 - Model-generated workflow, action, config, instruction, environment, key, credential, symlink, submodule, and binary changes are blocked.
 - Setup must be side-effect-free relative to Git. Dependency install scripts can run only as `factorysetup`, before model credentials exist.
 - The consumer must protect its default branch and require its CI plus `ai-factory/supervision` before human merge.

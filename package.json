@@ -12,6 +12,7 @@
     "check": "node scripts/factory/validate-distribution.mjs && node --test"
   },
   "devDependencies": {
-    "actionlint": "2.0.6"
+    "actionlint": "2.0.6",
+    "opencode-ai": "1.18.2"
   }
 }

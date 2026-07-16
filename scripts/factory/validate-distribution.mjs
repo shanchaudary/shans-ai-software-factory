@@ -46,16 +46,19 @@ await main(async () => {
   }
 
   const scripts = (await filesBelow("scripts/factory")).filter((path) => path.endsWith(".mjs"));
-  const required = ["prepare-task.mjs", "validate-patch.mjs", "publish.mjs", "resolve-managed-pr.mjs", "supervision.mjs", "collect-ci-evidence.mjs", "prepare-review-batches.mjs", "glm-review.mjs", "finalize.mjs"];
+  const required = ["prepare-task.mjs", "validate-patch.mjs", "publish.mjs", "resolve-managed-pr.mjs", "supervision.mjs", "collect-ci-evidence.mjs", "prepare-review-batches.mjs", "opencode-glm.mjs", "glm-review.mjs", "finalize.mjs"];
   for (const name of required) invariant(scripts.some((path) => path.endsWith(`/${name}`)), "DISTRIBUTION_INCOMPLETE", `Missing runtime entry point ${name}`);
 
   const implement = await readFile(".github/workflows/reusable-implement.yml", "utf8");
   const supervise = await readFile(".github/workflows/reusable-supervise.yml", "utf8");
   invariant(implement.includes("permission-profile: \":workspace\"") && implement.includes("persist-credentials: false"), "SECURITY_REGRESSION", "Implementation model isolation is missing");
   invariant(supervise.includes("ZAI_API_KEY") && supervise.includes("REVIEW_COVERAGE_INCOMPLETE") === false, "DISTRIBUTION_INCOMPLETE", "Supervisor wiring is missing");
+  invariant(supervise.includes("opencode-linux-x64-baseline/bin/opencode") && supervise.includes("test \"$version\" = \"1.18.2\"") && supervise.includes("factoryglm"), "SECURITY_REGRESSION", "Pinned OS-isolated OpenCode GLM transport is missing");
   invariant(supervise.includes("publish_repair:") && supervise.includes("Record human-gated ready state") && supervise.includes("Record fail-closed human intervention state"), "DISTRIBUTION_INCOMPLETE", "Supervisor state machine is incomplete");
   invariant(!implement.includes("merge") && !supervise.includes("merge_pull_request"), "FORBIDDEN_CAPABILITY", "Factory workflows must not merge");
 
+  const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+  invariant(packageJson.devDependencies?.["opencode-ai"] === "1.18.2", "UNPINNED_REVIEW_CLIENT", "OpenCode reviewer client must be exactly pinned");
   JSON.parse(await readFile("schemas/project.schema.json", "utf8"));
   JSON.parse(await readFile("templates/consumer/.ai-factory/project.json", "utf8"));
   process.stdout.write(`Validated ${workflows.length} active workflows and ${scripts.length} runtime modules.\n`);

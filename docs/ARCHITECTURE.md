@@ -37,7 +37,7 @@ This avoids a second source of truth. Repository-scoped concurrency groups seria
 4. Every failed-job log is downloaded and redacted. More than 64 MiB of failed logs fails closed instead of truncating evidence.
 5. A CI repair repeats the isolated Codex, verification, patch, fresh publication, and explicit CI-dispatch transaction.
 6. Successful CI produces a complete diff from the exact base and head. The runtime rejects protected, binary, or submodule changes and splits the full textual diff into checksummed segments and batches without dropping bytes.
-7. GLM reviews every segment with structured JSON. Each result must name the exact batch, use the schema and severity enums, and reference only a changed path. Missing, duplicated, altered, malformed, rate-limited, or incomplete results fail closed.
+7. GLM reviews every segment through the exactly pinned OpenCode terminal client and Z.AI Coding Plan provider. OpenCode runs as the dedicated `factoryglm` OS identity in an empty sandbox, receives no GitHub token, has every tool permission denied, cannot read the consumer checkout, cannot share sessions, and receives only one immutable review request attachment at a time. Each raw JSON result must name the exact batch, use the schema and severity enums, and reference only a changed path. Any tool attempt, missing, duplicated, altered, malformed, rate-limited, or incomplete result fails closed.
 8. P0/P1/P2 findings block by default. Blocking findings consume a bounded Codex repair cycle and return to CI. Advisory P3 findings remain in the evidence.
 9. A clear review writes a success commit status and `ai:ready-for-shan`. The PR stays draft. No factory path can merge or deploy.
 
