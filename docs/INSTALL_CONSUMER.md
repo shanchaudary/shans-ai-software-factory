@@ -67,7 +67,8 @@ Protect the default branch. Require pull requests, human review, the existing CI
 
 ## 6. Validate installation before live use
 
-- Run the consumer CI manually on a harmless branch and confirm the supervisor ignores it because it was not Actions-dispatched by the factory.
+- Run the consumer CI manually on a harmless branch and confirm the supervisor succeeds with an `ignore` disposition because it was not Actions-dispatched by the factory.
+- Rerun a factory-origin CI run and confirm supervision fails closed instead of accepting stale provenance; repairs must always dispatch a fresh run.
 - Run an unauthorized issue and confirm it is rejected.
 - Confirm black risk is rejected.
 - Confirm setup leaves Git clean and all real verification commands run.

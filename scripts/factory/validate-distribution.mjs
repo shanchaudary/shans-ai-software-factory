@@ -31,7 +31,7 @@ await main(async () => {
   for (const path of workflows) validateWorkflowText(path, await readFile(path, "utf8"));
 
   const scripts = (await filesBelow("scripts/factory")).filter((path) => path.endsWith(".mjs"));
-  const required = ["prepare-task.mjs", "validate-patch.mjs", "publish.mjs", "resolve-managed-pr.mjs", "collect-ci-evidence.mjs", "prepare-review-batches.mjs", "glm-review.mjs", "finalize.mjs"];
+  const required = ["prepare-task.mjs", "validate-patch.mjs", "publish.mjs", "resolve-managed-pr.mjs", "supervision.mjs", "collect-ci-evidence.mjs", "prepare-review-batches.mjs", "glm-review.mjs", "finalize.mjs"];
   for (const name of required) invariant(scripts.some((path) => path.endsWith(`/${name}`)), "DISTRIBUTION_INCOMPLETE", `Missing runtime entry point ${name}`);
 
   const implement = await readFile(".github/workflows/reusable-implement.yml", "utf8");

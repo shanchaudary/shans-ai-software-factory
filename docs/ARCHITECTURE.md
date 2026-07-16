@@ -32,7 +32,7 @@ This avoids a second source of truth. Repository-scoped concurrency groups seria
 ## Supervision transaction
 
 1. The thin supervisor receives only completed runs from the configured CI workflow name.
-2. The central inspector independently fetches the run and requires: the configured workflow path, `workflow_dispatch`, the GitHub Actions actor, same-repository head, exact factory branch, one open draft PR, `ai:managed`, a strict metadata marker, an allowed `ai:build` label event actor, factory-authored sequential commits, and a matching retry label.
+2. The central inspector independently fetches the run. Ordinary push, pull-request, manual, and non-factory-branch runs are ignored without writing a success status. A factory candidate requires: the configured workflow path, first run attempt, both original and triggering GitHub Actions actors, same-repository head, exact factory branch, one open draft PR, `ai:managed`, a strict metadata marker, an allowed `ai:build` label event actor, factory-authored sequential commits, and a matching retry label.
 3. Cancelled runs are ignored. Unsupported conclusions fail closed. Failed/timed-out runs enter repair only while the configured budget remains.
 4. Every failed-job log is downloaded and redacted. More than 64 MiB of failed logs fails closed instead of truncating evidence.
 5. A CI repair repeats the isolated Codex, verification, patch, fresh publication, and explicit CI-dispatch transaction.

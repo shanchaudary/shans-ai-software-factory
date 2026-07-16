@@ -9,6 +9,7 @@ import { prepareReviewBatches } from "../scripts/factory/review.mjs";
 import { attemptFromLabels, parseStateMarker, stateMarker, taskDigest } from "../scripts/factory/state.mjs";
 import { executeCommands } from "../scripts/factory/commands.mjs";
 import { run } from "../scripts/factory/lib.mjs";
+import { supervisionDisposition } from "../scripts/factory/supervision.mjs";
 
 const config = validateConfig({
   schema_version: 1,
@@ -19,6 +20,41 @@ const config = validateConfig({
   verification_commands: ["true"],
   allowed_actors: ["shan"],
   limits: { max_patch_bytes: 1024 * 1024, max_changed_files: 20, max_context_bytes: 1024, max_review_batch_bytes: 4096, max_repair_cycles: 2 },
+});
+
+function workflowRun(overrides = {}) {
+  return {
+    repository: { full_name: "shan/Cascada" },
+    path: ".github/workflows/ci.yml",
+    status: "completed",
+    event: "workflow_dispatch",
+    actor: { login: "github-actions[bot]" },
+    triggering_actor: { login: "github-actions[bot]" },
+    run_attempt: 1,
+    head_branch: "ai-factory/issue-12",
+    head_repository: { full_name: "shan/Cascada" },
+    head_sha: "a".repeat(40),
+    ...overrides,
+  };
+}
+
+const supervisionConfig = {
+  repository: "shan/Cascada",
+  ciWorkflow: "ci.yml",
+  branchPrefix: "ai-factory/",
+};
+
+test("supervision ignores ordinary CI and admits only exact factory dispatches", () => {
+  assert.equal(supervisionDisposition(workflowRun({ event: "pull_request", actor: { login: "shan" }, head_branch: "feature/real-work" }), supervisionConfig), "ignore");
+  assert.equal(supervisionDisposition(workflowRun({ actor: { login: "shan" } }), supervisionConfig), "ignore");
+  assert.equal(supervisionDisposition(workflowRun({ head_branch: "main" }), supervisionConfig), "ignore");
+  assert.equal(supervisionDisposition(workflowRun(), supervisionConfig), "inspect");
+});
+
+test("supervision fails closed on rerun or altered factory provenance", () => {
+  assert.throws(() => supervisionDisposition(workflowRun({ run_attempt: 2, triggering_actor: { login: "shan" } }), supervisionConfig), (error) => error.code === "UNMANAGED_RERUN");
+  assert.throws(() => supervisionDisposition(workflowRun({ path: ".github/workflows/not-ci.yml" }), supervisionConfig), (error) => error.code === "WRONG_WORKFLOW");
+  assert.throws(() => supervisionDisposition(workflowRun({ head_repository: { full_name: "attacker/Cascada" } }), supervisionConfig), (error) => error.code === "FORK_REJECTED");
 });
 
 test("state marker is strict and repair attempt is single-valued", () => {

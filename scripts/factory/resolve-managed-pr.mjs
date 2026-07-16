@@ -3,6 +3,7 @@ import { loadConfig } from "./config.mjs";
 import { GitHubApi } from "./github-api.mjs";
 import { githubOutput, invariant, main, parsePositiveInteger, writeJsonAtomic } from "./lib.mjs";
 import { attemptFromLabels, parseStateMarker, taskDigest } from "./state.mjs";
+import { supervisionDisposition } from "./supervision.mjs";
 import { RISK_LABELS } from "./task.mjs";
 
 function validateLiveIssue(issue, events, config, marker) {
@@ -39,13 +40,16 @@ await main(async () => {
   const config = await loadConfig(process.env.FACTORY_CONFIG ?? ".ai-factory/project.json");
   const github = new GitHubApi();
   const run = await github.getRun(runId);
-  invariant(run.repository?.full_name === github.repository, "RUN_REPOSITORY_MISMATCH", "Workflow run belongs to a different repository");
-  invariant(run.path === `.github/workflows/${config.ci_workflow}`, "WRONG_WORKFLOW", `Run path ${run.path} is not configured CI workflow ${config.ci_workflow}`);
-  invariant(run.status === "completed", "RUN_NOT_COMPLETE", "Factory only supervises completed CI runs");
-  invariant(run.event === "workflow_dispatch" && run.actor?.login === "github-actions[bot]", "UNMANAGED_RUN", "Factory only supervises CI runs explicitly dispatched by its publisher token");
-  invariant(typeof run.head_branch === "string" && run.head_branch.startsWith(config.branch_prefix), "UNMANAGED_BRANCH", "CI head is not a factory-managed branch");
-  invariant(run.head_repository?.full_name === github.repository, "FORK_REJECTED", "Factory never supervises fork heads");
-  invariant(/^[0-9a-f]{40}$/.test(run.head_sha ?? ""), "INVALID_SHA", "CI run has no full head SHA");
+  const disposition = supervisionDisposition(run, {
+    repository: github.repository,
+    ciWorkflow: config.ci_workflow,
+    branchPrefix: config.branch_prefix,
+  });
+  if (disposition === "ignore") {
+    await githubOutput("action", "ignore");
+    await githubOutput("ci_conclusion", run.conclusion ?? "");
+    return;
+  }
 
   const [owner] = github.repository.split("/");
   const pulls = await github.listPulls({ state: "open", head: `${owner}:${run.head_branch}`, base: config.default_branch });
