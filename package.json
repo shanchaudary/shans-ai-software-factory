@@ -10,5 +10,8 @@
   "scripts": {
     "test": "node --test",
     "check": "node scripts/factory/validate-distribution.mjs && node --test"
+  },
+  "devDependencies": {
+    "actionlint": "2.0.6"
   }
 }

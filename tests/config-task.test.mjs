@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createLinter } from "actionlint";
 import { validateConfig, HARD_PROTECTED_PATHS } from "../scripts/factory/config.mjs";
 import { validateTask } from "../scripts/factory/task.mjs";
 import { FactoryError } from "../scripts/factory/lib.mjs";
@@ -33,6 +34,24 @@ function issue(overrides = {}) {
     ...overrides,
   };
 }
+
+test("workflow validation rejects runner context in job-level environment", async () => {
+  const lint = await createLinter();
+  const workflow = [
+    "name: Invalid reusable workflow",
+    "on:",
+    "  workflow_call:",
+    "jobs:",
+    "  inspect:",
+    "    runs-on: ubuntu-latest",
+    "    env:",
+    "      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime",
+    "    steps:",
+    "      - run: echo ok",
+  ].join("\n");
+  const findings = lint(workflow, ".github/workflows/invalid.yml");
+  assert.ok(findings.some((finding) => finding.kind === "expression" && finding.message.includes('context "runner" is not allowed here')));
+});
 
 test("configuration expands hard security defaults and current models", () => {
   const config = validateConfig(rawConfig());

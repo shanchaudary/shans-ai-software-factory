@@ -31,11 +31,11 @@ jobs:
       expected_head: ${{ steps.head.outputs.sha }}
       branch: ${{ steps.task.outputs.branch }}
     env:
-      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_RUNTIME: ${{ github.workspace }}/../factory-tmp/factory-runtime
       FACTORY_CONFIG: .ai-factory/project.json
-      FACTORY_TASK_PATH: ${{ runner.temp }}/factory-task.json
-      FACTORY_PATCH_PATH: ${{ runner.temp }}/factory.patch
-      FACTORY_MANIFEST_PATH: ${{ runner.temp }}/factory-patch-manifest.json
+      FACTORY_TASK_PATH: ${{ github.workspace }}/../factory-tmp/factory-task.json
+      FACTORY_PATCH_PATH: ${{ github.workspace }}/../factory-tmp/factory.patch
+      FACTORY_MANIFEST_PATH: ${{ github.workspace }}/../factory-tmp/factory-patch-manifest.json
     steps:
       - name: Checkout consumer default branch
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
@@ -104,7 +104,7 @@ jobs:
         env:
           FACTORY_COMMAND_PHASE: setup
           FACTORY_COMMAND_USER: factorysetup
-          FACTORY_COMMAND_REPORT: ${{ runner.temp }}/factory-setup-report.json
+          FACTORY_COMMAND_REPORT: ${{ github.workspace }}/../factory-tmp/factory-setup-report.json
         run: node "$FACTORY_RUNTIME/run-project-commands.mjs"
 
       - name: Require side-effect-free project setup
@@ -140,7 +140,7 @@ jobs:
         env:
           FACTORY_COMMAND_PHASE: verify
           FACTORY_COMMAND_USER: factoryverify
-          FACTORY_COMMAND_REPORT: ${{ runner.temp }}/factory-verification-report.json
+          FACTORY_COMMAND_REPORT: ${{ github.workspace }}/../factory-tmp/factory-verification-report.json
         run: node "$FACTORY_RUNTIME/run-project-commands.mjs"
 
       - name: Capture and validate immutable patch
@@ -156,11 +156,11 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: |
-            ${{ runner.temp }}/factory.patch
-            ${{ runner.temp }}/factory-patch-manifest.json
-            ${{ runner.temp }}/factory-task.json
-            ${{ runner.temp }}/factory-setup-report.json
-            ${{ runner.temp }}/factory-verification-report.json
+            ${{ github.workspace }}/../factory-tmp/factory.patch
+            ${{ github.workspace }}/../factory-tmp/factory-patch-manifest.json
+            ${{ github.workspace }}/../factory-tmp/factory-task.json
+            ${{ github.workspace }}/../factory-tmp/factory-setup-report.json
+            ${{ github.workspace }}/../factory-tmp/factory-verification-report.json
 
   publish:
     name: Validated branch and draft PR publication
@@ -174,11 +174,11 @@ jobs:
       pull-requests: write
       statuses: write
     env:
-      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_RUNTIME: ${{ github.workspace }}/../factory-tmp/factory-runtime
       FACTORY_CONFIG: .ai-factory/project.json
-      FACTORY_TASK_PATH: ${{ runner.temp }}/factory-artifact/factory-task.json
-      FACTORY_PATCH_PATH: ${{ runner.temp }}/factory-artifact/factory.patch
-      FACTORY_MANIFEST_PATH: ${{ runner.temp }}/factory-artifact/factory-patch-manifest.json
+      FACTORY_TASK_PATH: ${{ github.workspace }}/../factory-tmp/factory-artifact/factory-task.json
+      FACTORY_PATCH_PATH: ${{ github.workspace }}/../factory-tmp/factory-artifact/factory.patch
+      FACTORY_MANIFEST_PATH: ${{ github.workspace }}/../factory-tmp/factory-artifact/factory-patch-manifest.json
     steps:
       - name: Checkout exact consumer base with publisher credentials
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
@@ -211,7 +211,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-implementation-${{ github.run_id }}
-          path: ${{ runner.temp }}/factory-artifact
+          path: ${{ github.workspace }}/../factory-tmp/factory-artifact
 
       - name: Revalidate and apply patch in fresh publisher job
         env:
@@ -237,7 +237,7 @@ jobs:
     permissions:
       issues: write
     env:
-      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_RUNTIME: ${{ github.workspace }}/../factory-tmp/factory-runtime
     steps:
       - name: Checkout pinned factory runtime
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2

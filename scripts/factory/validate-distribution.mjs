@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { createLinter } from "actionlint";
 import { invariant, main } from "./lib.mjs";
 
 async function filesBelow(root) {
@@ -28,7 +29,13 @@ export function validateWorkflowText(path, text) {
 await main(async () => {
   const workflows = (await filesBelow(".github/workflows")).filter((path) => /\.ya?ml$/.test(path));
   invariant(workflows.length >= 3, "DISTRIBUTION_INCOMPLETE", "Expected factory CI and both reusable workflows");
-  for (const path of workflows) validateWorkflowText(path, await readFile(path, "utf8"));
+  const lintWorkflow = await createLinter();
+  for (const path of workflows) {
+    const text = await readFile(path, "utf8");
+    validateWorkflowText(path, text);
+    const findings = lintWorkflow(text, path);
+    invariant(findings.length === 0, "INVALID_WORKFLOW", `${path} failed Actionlint validation`, findings);
+  }
 
   const scripts = (await filesBelow("scripts/factory")).filter((path) => path.endsWith(".mjs"));
   const required = ["prepare-task.mjs", "validate-patch.mjs", "publish.mjs", "resolve-managed-pr.mjs", "supervision.mjs", "collect-ci-evidence.mjs", "prepare-review-batches.mjs", "glm-review.mjs", "finalize.mjs"];
