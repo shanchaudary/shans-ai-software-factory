@@ -44,9 +44,9 @@ jobs:
       reason: ${{ steps.resolve.outputs.reason }}
       max_repair_cycles: ${{ steps.config.outputs.max_repair_cycles }}
     env:
-      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_RUNTIME: ${{ github.workspace }}/../factory-tmp/factory-runtime
       FACTORY_CONFIG: .ai-factory/project.json
-      FACTORY_CONTEXT_OUTPUT: ${{ runner.temp }}/factory-supervision-context.json
+      FACTORY_CONTEXT_OUTPUT: ${{ github.workspace }}/../factory-tmp/factory-supervision-context.json
     steps:
       - name: Checkout trusted consumer default branch
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
@@ -90,8 +90,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           FACTORY_RUN_ID: ${{ inputs.ci_run_id }}
-          FACTORY_CONTEXT_PATH: ${{ runner.temp }}/factory-supervision-context.json
-          FACTORY_EVIDENCE_OUTPUT: ${{ runner.temp }}/factory-ci-evidence.json
+          FACTORY_CONTEXT_PATH: ${{ github.workspace }}/../factory-tmp/factory-supervision-context.json
+          FACTORY_EVIDENCE_OUTPUT: ${{ github.workspace }}/../factory-tmp/factory-ci-evidence.json
         run: node "$FACTORY_RUNTIME/collect-ci-evidence.mjs"
 
       - name: Upload immutable supervision context
@@ -101,7 +101,7 @@ jobs:
           name: factory-context-${{ github.run_id }}
           if-no-files-found: error
           retention-days: 14
-          path: ${{ runner.temp }}/factory-supervision-context.json
+          path: ${{ github.workspace }}/../factory-tmp/factory-supervision-context.json
 
       - name: Upload complete failed-CI evidence
         if: ${{ steps.resolve.outputs.action == 'repair-ci' || steps.resolve.outputs.action == 'block' }}
@@ -110,7 +110,7 @@ jobs:
           name: factory-ci-evidence-${{ github.run_id }}
           if-no-files-found: error
           retention-days: 14
-          path: ${{ runner.temp }}/factory-ci-evidence.json
+          path: ${{ github.workspace }}/../factory-tmp/factory-ci-evidence.json
 
   review:
     name: Complete independent GLM review
@@ -124,11 +124,11 @@ jobs:
       verdict: ${{ steps.glm.outputs.verdict }}
       blocking_count: ${{ steps.glm.outputs.blocking_count }}
     env:
-      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_RUNTIME: ${{ github.workspace }}/../factory-tmp/factory-runtime
       FACTORY_CONFIG: .ai-factory/project.json
-      FACTORY_CONTEXT_PATH: ${{ runner.temp }}/factory-context/factory-supervision-context.json
-      FACTORY_REVIEW_DIRECTORY: ${{ runner.temp }}/factory-review
-      FACTORY_REVIEW_OUTPUT: ${{ runner.temp }}/factory-review-report.json
+      FACTORY_CONTEXT_PATH: ${{ github.workspace }}/../factory-tmp/factory-context/factory-supervision-context.json
+      FACTORY_REVIEW_DIRECTORY: ${{ github.workspace }}/../factory-tmp/factory-review
+      FACTORY_REVIEW_OUTPUT: ${{ github.workspace }}/../factory-tmp/factory-review-report.json
     steps:
       - name: Checkout exact CI-tested PR head
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
@@ -161,7 +161,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-context-${{ github.run_id }}
-          path: ${{ runner.temp }}/factory-context
+          path: ${{ github.workspace }}/../factory-tmp/factory-context
 
       - name: Reject manual governance, config, binary, or submodule changes
         env:
@@ -190,7 +190,7 @@ jobs:
           name: factory-review-${{ github.run_id }}
           if-no-files-found: error
           retention-days: 14
-          path: ${{ runner.temp }}/factory-review-report.json
+          path: ${{ github.workspace }}/../factory-tmp/factory-review-report.json
 
   repair_engineer:
     name: Isolated Codex repair
@@ -208,11 +208,11 @@ jobs:
     outputs:
       mode: ${{ steps.mode.outputs.value }}
     env:
-      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_RUNTIME: ${{ github.workspace }}/../factory-tmp/factory-runtime
       FACTORY_CONFIG: .ai-factory/project.json
-      FACTORY_CONTEXT_PATH: ${{ runner.temp }}/factory-context/factory-supervision-context.json
-      FACTORY_PATCH_PATH: ${{ runner.temp }}/factory.patch
-      FACTORY_MANIFEST_PATH: ${{ runner.temp }}/factory-patch-manifest.json
+      FACTORY_CONTEXT_PATH: ${{ github.workspace }}/../factory-tmp/factory-context/factory-supervision-context.json
+      FACTORY_PATCH_PATH: ${{ github.workspace }}/../factory-tmp/factory.patch
+      FACTORY_MANIFEST_PATH: ${{ github.workspace }}/../factory-tmp/factory-patch-manifest.json
     steps:
       - name: Select bounded repair mode
         id: mode
@@ -257,21 +257,21 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-context-${{ github.run_id }}
-          path: ${{ runner.temp }}/factory-context
+          path: ${{ github.workspace }}/../factory-tmp/factory-context
 
       - name: Download complete CI evidence
         if: ${{ steps.mode.outputs.value == 'repair-ci' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-ci-evidence-${{ github.run_id }}
-          path: ${{ runner.temp }}/factory-evidence
+          path: ${{ github.workspace }}/../factory-tmp/factory-evidence
 
       - name: Download complete GLM findings
         if: ${{ steps.mode.outputs.value == 'repair-review' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-review-${{ github.run_id }}
-          path: ${{ runner.temp }}/factory-review-result
+          path: ${{ github.workspace }}/../factory-tmp/factory-review-result
 
       - name: Reject manual governance, config, binary, or submodule changes
         env:
@@ -299,7 +299,7 @@ jobs:
         env:
           FACTORY_COMMAND_PHASE: setup
           FACTORY_COMMAND_USER: factorysetup
-          FACTORY_COMMAND_REPORT: ${{ runner.temp }}/factory-setup-report.json
+          FACTORY_COMMAND_REPORT: ${{ github.workspace }}/../factory-tmp/factory-setup-report.json
         run: node "$FACTORY_RUNTIME/run-project-commands.mjs"
 
       - name: Require side-effect-free project setup
@@ -311,7 +311,7 @@ jobs:
           FACTORY_MODE: repair-ci
           FACTORY_EXPECTED_HEAD: ${{ needs.inspect.outputs.head_sha }}
           FACTORY_ATTEMPT: ${{ needs.inspect.outputs.next_attempt }}
-          FACTORY_EVIDENCE_PATH: ${{ runner.temp }}/factory-evidence/factory-ci-evidence.json
+          FACTORY_EVIDENCE_PATH: ${{ github.workspace }}/../factory-tmp/factory-evidence/factory-ci-evidence.json
           FACTORY_EVIDENCE_MODEL_PATH: .git/factory-ci-evidence.json
           FACTORY_PROMPT_OUTPUT: .git/factory-prompt.md
         run: |
@@ -326,7 +326,7 @@ jobs:
           FACTORY_MODE: repair-review
           FACTORY_EXPECTED_HEAD: ${{ needs.inspect.outputs.head_sha }}
           FACTORY_ATTEMPT: ${{ needs.inspect.outputs.next_attempt }}
-          FACTORY_FINDINGS_PATH: ${{ runner.temp }}/factory-review-result/factory-review-report.json
+          FACTORY_FINDINGS_PATH: ${{ github.workspace }}/../factory-tmp/factory-review-result/factory-review-report.json
           FACTORY_FINDINGS_MODEL_PATH: .git/factory-review-findings.json
           FACTORY_PROMPT_OUTPUT: .git/factory-prompt.md
         run: |
@@ -354,7 +354,7 @@ jobs:
         env:
           FACTORY_COMMAND_PHASE: verify
           FACTORY_COMMAND_USER: factoryverify
-          FACTORY_COMMAND_REPORT: ${{ runner.temp }}/factory-verification-report.json
+          FACTORY_COMMAND_REPORT: ${{ github.workspace }}/../factory-tmp/factory-verification-report.json
         run: node "$FACTORY_RUNTIME/run-project-commands.mjs"
 
       - name: Capture and validate immutable repair patch
@@ -370,10 +370,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: |
-            ${{ runner.temp }}/factory.patch
-            ${{ runner.temp }}/factory-patch-manifest.json
-            ${{ runner.temp }}/factory-setup-report.json
-            ${{ runner.temp }}/factory-verification-report.json
+            ${{ github.workspace }}/../factory-tmp/factory.patch
+            ${{ github.workspace }}/../factory-tmp/factory-patch-manifest.json
+            ${{ github.workspace }}/../factory-tmp/factory-setup-report.json
+            ${{ github.workspace }}/../factory-tmp/factory-verification-report.json
 
   publish_repair:
     name: Validated repair publication and CI redispatch
@@ -388,11 +388,11 @@ jobs:
       pull-requests: write
       statuses: write
     env:
-      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_RUNTIME: ${{ github.workspace }}/../factory-tmp/factory-runtime
       FACTORY_CONFIG: .ai-factory/project.json
-      FACTORY_CONTEXT_PATH: ${{ runner.temp }}/factory-context/factory-supervision-context.json
-      FACTORY_PATCH_PATH: ${{ runner.temp }}/factory-repair/factory.patch
-      FACTORY_MANIFEST_PATH: ${{ runner.temp }}/factory-repair/factory-patch-manifest.json
+      FACTORY_CONTEXT_PATH: ${{ github.workspace }}/../factory-tmp/factory-context/factory-supervision-context.json
+      FACTORY_PATCH_PATH: ${{ github.workspace }}/../factory-tmp/factory-repair/factory.patch
+      FACTORY_MANIFEST_PATH: ${{ github.workspace }}/../factory-tmp/factory-repair/factory-patch-manifest.json
     steps:
       - name: Checkout exact pre-repair PR head with publisher credentials
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
@@ -425,13 +425,13 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-context-${{ github.run_id }}
-          path: ${{ runner.temp }}/factory-context
+          path: ${{ github.workspace }}/../factory-tmp/factory-context
 
       - name: Download immutable repair artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-repair-${{ github.run_id }}
-          path: ${{ runner.temp }}/factory-repair
+          path: ${{ github.workspace }}/../factory-tmp/factory-repair
 
       - name: Revalidate and apply repair in fresh publisher job
         env:
@@ -461,10 +461,10 @@ jobs:
       pull-requests: write
       statuses: write
     env:
-      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_RUNTIME: ${{ github.workspace }}/../factory-tmp/factory-runtime
       FACTORY_CONFIG: .ai-factory/project.json
-      FACTORY_CONTEXT_PATH: ${{ runner.temp }}/factory-context/factory-supervision-context.json
-      FACTORY_REVIEW_PATH: ${{ runner.temp }}/factory-review-result/factory-review-report.json
+      FACTORY_CONTEXT_PATH: ${{ github.workspace }}/../factory-tmp/factory-context/factory-supervision-context.json
+      FACTORY_REVIEW_PATH: ${{ github.workspace }}/../factory-tmp/factory-review-result/factory-review-report.json
     steps:
       - name: Checkout exact reviewed PR head
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
@@ -493,12 +493,12 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-context-${{ github.run_id }}
-          path: ${{ runner.temp }}/factory-context
+          path: ${{ github.workspace }}/../factory-tmp/factory-context
       - name: Download independent review
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-review-${{ github.run_id }}
-          path: ${{ runner.temp }}/factory-review-result
+          path: ${{ github.workspace }}/../factory-tmp/factory-review-result
       - name: Publish evidence-backed ready state
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -524,9 +524,9 @@ jobs:
       pull-requests: write
       statuses: write
     env:
-      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_RUNTIME: ${{ github.workspace }}/../factory-tmp/factory-runtime
       FACTORY_CONFIG: .ai-factory/project.json
-      FACTORY_CONTEXT_PATH: ${{ runner.temp }}/factory-context/factory-supervision-context.json
+      FACTORY_CONTEXT_PATH: ${{ github.workspace }}/../factory-tmp/factory-context/factory-supervision-context.json
     steps:
       - name: Checkout exact last known PR head
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
@@ -555,7 +555,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-context-${{ github.run_id }}
-          path: ${{ runner.temp }}/factory-context
+          path: ${{ github.workspace }}/../factory-tmp/factory-context
       - name: Publish fail-closed state
         env:
           GITHUB_TOKEN: ${{ github.token }}
