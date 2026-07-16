@@ -1,0 +1,14 @@
+{
+  "name": "shans-ai-software-factory",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Project-agnostic, fail-closed GitHub software delivery supervisor.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node scripts/factory/validate-distribution.mjs && node --test"
+  }
+}

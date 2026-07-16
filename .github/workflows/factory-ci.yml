@@ -1,0 +1,31 @@
+name: Factory CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: factory-ci-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Runtime, contract, and security tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Check every runtime module parses
+        run: find scripts -name '*.mjs' -print0 | xargs -0 -n1 node --check
+      - name: Validate pinned distribution and boundaries
+        run: node scripts/factory/validate-distribution.mjs
+      - name: Run integration and failure-path tests
+        run: node --test

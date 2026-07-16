@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shanchaudary/shans-ai-software-factory/schemas/project.schema.json",
+  "title": "AI software factory consumer configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "project_id",
+    "default_branch",
+    "ci_workflow",
+    "setup_commands",
+    "verification_commands",
+    "allowed_actors"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "project_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$" },
+    "default_branch": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "ci_workflow": { "type": "string", "pattern": "^[A-Za-z0-9._-]+\\.ya?ml$" },
+    "setup_commands": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": { "type": "string", "minLength": 1, "maxLength": 2000 }
+    },
+    "verification_commands": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 30,
+      "items": { "type": "string", "minLength": 1, "maxLength": 2000 }
+    },
+    "context_files": {
+      "type": "array",
+      "maxItems": 30,
+      "items": { "type": "string", "minLength": 1, "maxLength": 260 }
+    },
+    "allowed_actors": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,39}$" }
+    },
+    "branch_prefix": { "type": "string", "pattern": "^[A-Za-z0-9._/-]{1,80}$" },
+    "protected_paths": {
+      "type": "array",
+      "maxItems": 100,
+      "items": { "type": "string", "minLength": 1, "maxLength": 260 }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_changed_files": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "max_patch_bytes": { "type": "integer", "minimum": 1024, "maximum": 52428800 },
+        "max_context_bytes": { "type": "integer", "minimum": 1024, "maximum": 10485760 },
+        "max_review_batch_bytes": { "type": "integer", "minimum": 4096, "maximum": 500000 },
+        "max_repair_cycles": { "type": "integer", "minimum": 0, "maximum": 5 }
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "reasoning_effort": { "enum": ["low", "medium", "high", "xhigh"] }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": { "type": "string", "pattern": "^glm-[A-Za-z0-9.-]+$" },
+        "blocking_severities": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["P0", "P1", "P2", "P3"] }
+        }
+      }
+    }
+  }
+}

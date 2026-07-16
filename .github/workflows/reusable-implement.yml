@@ -1,0 +1,258 @@
+name: Reusable AI implementation
+
+on:
+  workflow_call:
+    inputs:
+      issue_number:
+        description: Authorized issue number
+        required: true
+        type: number
+      factory_ref:
+        description: Full commit SHA pinning this workflow and its runtime
+        required: true
+        type: string
+    secrets:
+      OPENAI_API_KEY:
+        required: true
+
+concurrency:
+  group: ai-factory-implement-${{ github.repository }}-${{ inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  engineer:
+    name: Isolated Codex engineering
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      expected_head: ${{ steps.head.outputs.sha }}
+      branch: ${{ steps.task.outputs.branch }}
+    env:
+      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_CONFIG: .ai-factory/project.json
+      FACTORY_TASK_PATH: ${{ runner.temp }}/factory-task.json
+      FACTORY_PATCH_PATH: ${{ runner.temp }}/factory.patch
+      FACTORY_MANIFEST_PATH: ${{ runner.temp }}/factory-patch-manifest.json
+    steps:
+      - name: Checkout consumer default branch
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout pinned factory runtime
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          repository: shanchaudary/shans-ai-software-factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-source
+          persist-credentials: false
+
+      - name: Isolate and verify factory runtime
+        env:
+          EXPECTED_FACTORY_REF: ${{ inputs.factory_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_FACTORY_REF" =~ ^[0-9a-f]{40}$ ]]
+          actual="$(git -C .factory-source rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_FACTORY_REF"
+          mkdir -p "$FACTORY_RUNTIME"
+          cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
+          rm -rf .factory-source
+
+      - name: Validate consumer contract
+        id: config
+        run: node "$FACTORY_RUNTIME/validate-config.mjs"
+
+      - name: Verify checked-out default branch
+        id: head
+        env:
+          CONFIGURED_DEFAULT: ${{ steps.config.outputs.default_branch }}
+          REPOSITORY_DEFAULT: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          test "$CONFIGURED_DEFAULT" = "$REPOSITORY_DEFAULT"
+          sha="$(git rev-parse HEAD)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Authorize and materialize issue contract
+        id: task
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FACTORY_ISSUE_NUMBER: ${{ inputs.issue_number }}
+          FACTORY_TRIGGER_ACTOR: ${{ github.actor }}
+        run: node "$FACTORY_RUNTIME/prepare-task.mjs"
+
+      - name: Create isolated setup, model, and verification identities
+        run: |
+          set -euo pipefail
+          sudo groupadd factorywork
+          sudo useradd --create-home --shell /bin/bash --gid factorywork factorysetup
+          sudo useradd --create-home --shell /bin/bash --gid factorywork factorycodex
+          sudo useradd --create-home --shell /bin/bash --gid factorywork factoryverify
+          sudo chgrp -R factorywork "$GITHUB_WORKSPACE"
+          sudo chmod -R g+rwX "$GITHUB_WORKSPACE"
+          sudo chmod -R g-w "$GITHUB_WORKSPACE/.git"
+          sudo find "$GITHUB_WORKSPACE" -path "$GITHUB_WORKSPACE/.git" -prune -o -type d -exec chmod g+s {} +
+
+      - name: Run project setup before model credentials exist
+        env:
+          FACTORY_COMMAND_PHASE: setup
+          FACTORY_COMMAND_USER: factorysetup
+          FACTORY_COMMAND_REPORT: ${{ runner.temp }}/factory-setup-report.json
+        run: node "$FACTORY_RUNTIME/run-project-commands.mjs"
+
+      - name: Require side-effect-free project setup
+        run: node "$FACTORY_RUNTIME/assert-clean.mjs"
+
+      - name: Build implementation prompt from exact repository state
+        env:
+          FACTORY_MODE: implement
+          FACTORY_EXPECTED_HEAD: ${{ steps.head.outputs.sha }}
+          FACTORY_PROMPT_OUTPUT: .git/factory-prompt.md
+        run: |
+          node "$FACTORY_RUNTIME/build-prompt.mjs"
+          sudo chgrp factorywork .git/factory-prompt.md
+          sudo chmod 0640 .git/factory-prompt.md
+
+      - name: Run pinned Codex implementation engine
+        id: codex
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
+        env:
+          GIT_OPTIONAL_LOCKS: "0"
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          safety-strategy: unprivileged-user
+          codex-user: factorycodex
+          prompt-file: .git/factory-prompt.md
+          model: ${{ steps.config.outputs.codex_model }}
+          effort: ${{ steps.config.outputs.codex_effort }}
+          codex-version: 0.144.5
+          allow-users: ${{ steps.config.outputs.allowed_actors }}
+
+      - name: Run authoritative project verification
+        env:
+          FACTORY_COMMAND_PHASE: verify
+          FACTORY_COMMAND_USER: factoryverify
+          FACTORY_COMMAND_REPORT: ${{ runner.temp }}/factory-verification-report.json
+        run: node "$FACTORY_RUNTIME/run-project-commands.mjs"
+
+      - name: Capture and validate immutable patch
+        env:
+          FACTORY_PATCH_MODE: capture
+          FACTORY_EXPECTED_HEAD: ${{ steps.head.outputs.sha }}
+        run: node "$FACTORY_RUNTIME/validate-patch.mjs"
+
+      - name: Upload implementation evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: factory-implementation-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/factory.patch
+            ${{ runner.temp }}/factory-patch-manifest.json
+            ${{ runner.temp }}/factory-task.json
+            ${{ runner.temp }}/factory-setup-report.json
+            ${{ runner.temp }}/factory-verification-report.json
+
+  publish:
+    name: Validated branch and draft PR publication
+    needs: engineer
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: write
+      contents: write
+      issues: write
+      pull-requests: write
+      statuses: write
+    env:
+      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+      FACTORY_CONFIG: .ai-factory/project.json
+      FACTORY_TASK_PATH: ${{ runner.temp }}/factory-artifact/factory-task.json
+      FACTORY_PATCH_PATH: ${{ runner.temp }}/factory-artifact/factory.patch
+      FACTORY_MANIFEST_PATH: ${{ runner.temp }}/factory-artifact/factory-patch-manifest.json
+    steps:
+      - name: Checkout exact consumer base with publisher credentials
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          ref: ${{ needs.engineer.outputs.expected_head }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Checkout pinned factory runtime
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          repository: shanchaudary/shans-ai-software-factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-source
+          persist-credentials: false
+
+      - name: Isolate and verify factory runtime
+        env:
+          EXPECTED_FACTORY_REF: ${{ inputs.factory_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_FACTORY_REF" =~ ^[0-9a-f]{40}$ ]]
+          actual="$(git -C .factory-source rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_FACTORY_REF"
+          mkdir -p "$FACTORY_RUNTIME"
+          cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
+          rm -rf .factory-source
+
+      - name: Download immutable implementation artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: factory-implementation-${{ github.run_id }}
+          path: ${{ runner.temp }}/factory-artifact
+
+      - name: Revalidate and apply patch in fresh publisher job
+        env:
+          FACTORY_PATCH_MODE: apply
+          FACTORY_EXPECTED_HEAD: ${{ needs.engineer.outputs.expected_head }}
+        run: node "$FACTORY_RUNTIME/validate-patch.mjs"
+
+      - name: Publish draft PR and explicitly dispatch consumer CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FACTORY_PUBLISH_MODE: implement
+          FACTORY_EXPECTED_HEAD: ${{ needs.engineer.outputs.expected_head }}
+          FACTORY_BRANCH: ${{ needs.engineer.outputs.branch }}
+          FACTORY_ATTEMPT: 0
+        run: node "$FACTORY_RUNTIME/publish.mjs"
+
+  report_failure:
+    name: Report fail-closed implementation stop
+    needs: [engineer, publish]
+    if: ${{ always() && (needs.engineer.result == 'failure' || needs.publish.result == 'failure') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+    env:
+      FACTORY_RUNTIME: ${{ runner.temp }}/factory-runtime
+    steps:
+      - name: Checkout pinned factory runtime
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
+        with:
+          repository: shanchaudary/shans-ai-software-factory
+          ref: ${{ inputs.factory_ref }}
+          persist-credentials: false
+      - name: Report the blocked task
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FACTORY_ISSUE_NUMBER: ${{ inputs.issue_number }}
+          FACTORY_BLOCK_REASON: Implementation or isolated publication failed. Inspect this workflow's failed job and logs; no success was inferred.
+          EXPECTED_FACTORY_REF: ${{ inputs.factory_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_FACTORY_REF" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$EXPECTED_FACTORY_REF"
+          node scripts/factory/report-task-failure.mjs

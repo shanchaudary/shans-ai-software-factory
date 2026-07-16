@@ -1,0 +1,28 @@
+name: AI factory supervisor
+
+on:
+  workflow_run:
+    workflows: ["REPLACE_WITH_EXACT_CONSUMER_CI_WORKFLOW_NAME"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      ci_run_id:
+        description: Existing completed consumer CI workflow run ID
+        required: true
+        type: number
+
+jobs:
+  supervise:
+    permissions:
+      actions: write
+      contents: write
+      issues: write
+      pull-requests: write
+      statuses: write
+    uses: shanchaudary/shans-ai-software-factory/.github/workflows/reusable-supervise.yml@REPLACE_WITH_FULL_FACTORY_COMMIT_SHA
+    with:
+      ci_run_id: ${{ github.event_name == 'workflow_dispatch' && inputs.ci_run_id || github.event.workflow_run.id }}
+      factory_ref: REPLACE_WITH_FULL_FACTORY_COMMIT_SHA
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
