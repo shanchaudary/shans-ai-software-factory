@@ -39,6 +39,8 @@ The supervisor does not trust event payload alone. It re-fetches GitHub state an
 
 The system is fail-closed. It never converts missing evidence into success. API errors, quota exhaustion, timeouts, malformed JSON, incomplete batches, absent logs, invalid config, unsupported conclusions, stale heads, retry exhaustion, and unsafe changes leave a failing status or `ai:needs-shan`. A cancelled obsolete CI run is ignored; it is not labeled as a product defect.
 
+Authenticated GitHub API reads retry transport failures and HTTP `429`, `502`, `503`, and `504` responses with bounded backoff. Reads make at most five total attempts and emit structured retry evidence. GitHub API writes are never automatically retried, preventing an ambiguous timeout from duplicating comments, labels, pull requests, statuses, or workflow dispatches.
+
 Artifacts are retained for 14 days. PR status comments record run links and cryptographic hashes, but hashes are evidence identifiers—not signatures. GitHub audit logs, branch protection, secret scanning, and organization policy remain required controls.
 
 ## Deliberate exclusions
