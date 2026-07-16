@@ -57,9 +57,9 @@ Never pin a branch or moving tag. Upgrade all consumers through normal reviewed 
 In each consumer repository, add:
 
 - `OPENAI_API_KEY` for the OpenAI API used by the official Codex action;
-- `ZAI_API_KEY` for the Z.AI Coding Plan endpoint used by GLM review.
+- `ZAI_API_KEY` from the subscriber's GLM Coding Plan. The factory uses it only through the pinned, officially supported OpenCode terminal client and the dedicated Coding Plan endpoint.
 
-Do not add these secrets to the central factory repository, source files, config, issue text, or chat. Set provider-side hard spend limits and alerts. Repository secrets are exposed only to the reusable jobs that explicitly declare them.
+Do not add these secrets to the central factory repository, source files, config, issue text, or chat. Configure the lowest practical provider limits, quota alerts, and prepaid balance. Repository secrets are exposed only to the reusable jobs that explicitly declare them.
 
 ## 5. Add branch protection
 

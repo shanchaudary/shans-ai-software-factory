@@ -7,7 +7,7 @@
 3. Apply exactly one risk label. `green`, `yellow`, and `red` are accepted by the engine; `black` is always rejected. Risk labels do not bypass human review.
 4. An actor listed in `.ai-factory/project.json` applies `ai:build` last. This label event is the authorization record.
 5. Watch the implementation workflow. A successful run produces a draft PR and dispatches consumer CI.
-6. The supervisor automatically responds to the exact CI result. It may produce a repair and redispatch CI, or review the successful diff with GLM.
+6. The supervisor automatically responds to the exact CI result. It may produce a repair and redispatch CI, or review the successful diff with GLM through the pinned OpenCode terminal client.
 7. Act only when the PR shows `ai:ready-for-shan` and the `ai-factory/supervision` commit status is successful. Review the code, evidence, migrations, product behavior, cost, and deployment plan yourself.
 8. Merge through the repository's normal protected process. Deployment remains the repository's existing human-controlled process.
 

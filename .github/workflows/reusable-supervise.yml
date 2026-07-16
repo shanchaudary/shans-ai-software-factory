@@ -129,6 +129,9 @@ jobs:
       FACTORY_CONTEXT_PATH: ${{ github.workspace }}/../factory-tmp/factory-context/factory-supervision-context.json
       FACTORY_REVIEW_DIRECTORY: ${{ github.workspace }}/../factory-tmp/factory-review
       FACTORY_REVIEW_OUTPUT: ${{ github.workspace }}/../factory-tmp/factory-review-report.json
+      FACTORY_OPENCODE_BIN: ${{ github.workspace }}/../factory-tmp/factory-runtime/bin/opencode
+      FACTORY_GLM_REQUEST_ROOT: ${{ github.workspace }}/../factory-tmp/factory-glm-requests
+      FACTORY_GLM_SANDBOX: /home/factoryglm/review
     steps:
       - name: Checkout exact CI-tested PR head
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.2
@@ -153,8 +156,16 @@ jobs:
           [[ "$EXPECTED_FACTORY_REF" =~ ^[0-9a-f]{40}$ ]]
           actual="$(git -C .factory-source rev-parse HEAD)"
           test "$actual" = "$EXPECTED_FACTORY_REF"
+          npm ci --ignore-scripts --prefix .factory-source
+          opencode_source=".factory-source/node_modules/opencode-linux-x64-baseline/bin/opencode"
+          test -x "$opencode_source"
+          verify_home="$RUNNER_TEMP/factory-opencode-verify"
+          mkdir -p "$verify_home"
+          version="$(HOME="$verify_home" XDG_CONFIG_HOME="$verify_home/config" XDG_DATA_HOME="$verify_home/data" XDG_CACHE_HOME="$verify_home/cache" "$opencode_source" --version)"
+          test "$version" = "1.18.2"
           mkdir -p "$FACTORY_RUNTIME"
           cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
+          install -D -m 0555 "$opencode_source" "$FACTORY_RUNTIME/bin/opencode"
           rm -rf .factory-source
 
       - name: Download immutable supervision context
@@ -178,7 +189,20 @@ jobs:
           FACTORY_HEAD_SHA: ${{ needs.inspect.outputs.head_sha }}
         run: node "$FACTORY_RUNTIME/prepare-review-batches.mjs"
 
-      - name: Review every exact diff segment with GLM
+      - name: Create an OS-isolated read-only GLM terminal identity
+        run: |
+          set -euo pipefail
+          sudo useradd --create-home --shell /usr/sbin/nologin factoryglm
+          sudo install -d -o factoryglm -g factoryglm -m 0700 \
+            /home/factoryglm/review \
+            /home/factoryglm/tmp \
+            /home/factoryglm/.config \
+            /home/factoryglm/.local/share \
+            /home/factoryglm/.cache
+          sudo chmod -R o-rwx "$GITHUB_WORKSPACE"
+          mkdir -p "$FACTORY_GLM_REQUEST_ROOT"
+
+      - name: Review every exact diff segment with pinned OpenCode and GLM
         id: glm
         env:
           ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}

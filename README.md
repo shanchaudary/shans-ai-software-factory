@@ -26,7 +26,7 @@ stateDiagram-v2
 ## Non-negotiable boundaries
 
 - Codex can edit a workspace but never receives a write-capable GitHub token.
-- GLM receives the task, exact diff batches, context, and CI evidence; it never runs consumer code or receives a GitHub token.
+- GLM runs through a pinned, officially supported OpenCode terminal client under a read-only OS identity. It receives the task, exact diff batches, context, and CI evidence; it never runs consumer code or receives a GitHub token.
 - Publisher jobs can write branches and pull-request metadata but never receive model API keys.
 - Generated patches cannot modify workflows, factory configuration, repository instructions, credentials, submodules, or other protected governance paths.
 - A moved branch head, incomplete review coverage, malformed model response, missing secret, failed command, API error, unsupported conclusion, or retry exhaustion blocks progress.

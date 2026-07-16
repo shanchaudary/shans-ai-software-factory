@@ -29,7 +29,7 @@ jobs:
           node-version: 24
           cache: npm
       - name: Install locked validation dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
       - name: Check every runtime module parses
         run: find scripts -name '*.mjs' -print0 | xargs -0 -n1 node --check
       - name: Validate pinned distribution and boundaries
