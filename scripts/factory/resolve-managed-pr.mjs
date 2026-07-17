@@ -64,7 +64,7 @@ await main(async () => {
   const marker = parseStateMarker(pr.body);
   invariant(marker && marker.project === config.project_id, "UNMANAGED_PR", "Pull request factory marker is missing or does not match this project");
   invariant(pr.head.ref === `${config.branch_prefix}issue-${marker.issue}`, "UNMANAGED_PR", "Factory branch does not match its marked issue number");
-  const [issue, events, comments, commits] = await Promise.all([github.getIssue(marker.issue), github.listIssueEvents(marker.issue), github.listComments(marker.issue), github.listPullCommits(pr.number)]);
+  const [issue, events, comments, commits] = await Promise.all([github.getIssue(marker.issue), github.listIssueTimelineEvents(marker.issue), github.listComments(marker.issue), github.listPullCommits(pr.number)]);
   const task = validateLiveIssue(issue, events, config, marker);
   invariant(taskDigest(task) === marker.task_sha, "TASK_CONTRACT_CHANGED", "Issue contract changed after the implementation transaction was authorized");
   const receipt = `<!-- ai-factory:receipt:v1 pr=${pr.number} task_sha=${marker.task_sha} branch=${pr.head.ref} -->`;

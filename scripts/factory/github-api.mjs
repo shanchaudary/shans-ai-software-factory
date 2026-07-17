@@ -149,7 +149,7 @@ export class GitHubApi {
     return this.paginate(this.repoPath(`/pulls?${query}`));
   }
   listComments(number) { return this.paginate(this.repoPath(`/issues/${number}/comments`)); }
-  listIssueEvents(number) { return this.paginate(this.repoPath(`/issues/${number}/events`)); }
+  listIssueTimelineEvents(number) { return this.paginate(this.repoPath(`/issues/${number}/timeline`)); }
   listPullCommits(number) { return this.paginate(this.repoPath(`/pulls/${number}/commits`)); }
   createComment(number, body) { return this.request("POST", this.repoPath(`/issues/${number}/comments`), { body: { body } }); }
   updateComment(id, body) { return this.request("PATCH", this.repoPath(`/issues/comments/${id}`), { body: { body } }); }
