@@ -7,7 +7,7 @@ import { validateTask } from "./task.mjs";
 await main(async () => {
   const issueNumber = parsePositiveInteger(process.env.FACTORY_ISSUE_NUMBER, "FACTORY_ISSUE_NUMBER");
   const actor = process.env.FACTORY_TRIGGER_ACTOR;
-  const outputPath = process.env.FACTORY_TASK_OUTPUT ?? `${process.env.RUNNER_TEMP ?? "."}/factory-task.json`;
+  const outputPath = process.env.FACTORY_TASK_OUTPUT ?? process.env.FACTORY_TASK_PATH ?? `${process.env.RUNNER_TEMP ?? "."}/factory-task.json`;
   const config = await loadConfig(process.env.FACTORY_CONFIG ?? ".ai-factory/project.json");
   const github = new GitHubApi();
   const [issue, events] = await Promise.all([github.getIssue(issueNumber), github.listIssueTimelineEvents(issueNumber)]);

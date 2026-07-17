@@ -98,3 +98,11 @@ test("isolated model workflows grant only parent-directory traversal", async () 
     assert.doesNotMatch(workflow, /setfacl -m [^\n]*:[rw-]*[rw][rwx-]*/);
   }
 });
+
+test("implementation task producer and consumers share one artifact path", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/reusable-implement.yml", import.meta.url), "utf8");
+  const producerBinding = "FACTORY_TASK_OUTPUT: ${{ env.FACTORY_TASK_PATH }}";
+  assert.equal(workflow.split(producerBinding).length - 1, 1);
+  const prepareTask = await readFile(new URL("../scripts/factory/prepare-task.mjs", import.meta.url), "utf8");
+  assert.match(prepareTask, /FACTORY_TASK_OUTPUT \?\? process\.env\.FACTORY_TASK_PATH/);
+});
