@@ -131,7 +131,8 @@ test("isolated project commands enter the exact checkout without runner shell in
   const args = isolatedUserSudoArgs("pwd; test -f package-lock.json", "factorysetup", checkout);
   assert.deepEqual(args.slice(0, 5), ["-n", "-u", "factorysetup", "-H", "--"]);
   assert.equal(args.at(-1), checkout);
-  assert.equal(args[12].includes(checkout), false);
+  assert.deepEqual(args.slice(5, 10), ["env", "BASH_ENV=/dev/null", "bash", "--noprofile", "--norc"]);
+  assert.equal(args[13].includes(checkout), false);
   const result = await run(args[5], args.slice(6), { cwd: root, env: { ...process.env, BASH_ENV: bashEnv } });
 
   assert.equal(result.stdout.trim(), checkout);

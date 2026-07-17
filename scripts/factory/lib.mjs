@@ -153,7 +153,7 @@ ${command}`,
 
 export function isolatedUserSudoArgs(command, user, cwd) {
   invariant(["factorysetup", "factoryverify"].includes(user), "INVALID_COMMAND_USER", "Project commands may run only as an isolated factory setup or verification user");
-  return ["-n", "-u", user, "-H", "--", "env", "-u", "BASH_ENV", "bash", ...isolatedUserShellArgs(command, cwd)];
+  return ["-n", "-u", user, "-H", "--", "env", "BASH_ENV=/dev/null", "bash", "--noprofile", "--norc", ...isolatedUserShellArgs(command, cwd)];
 }
 
 export async function runShellAsUser(command, user, options = {}) {
