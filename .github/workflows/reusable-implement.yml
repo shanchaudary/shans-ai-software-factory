@@ -89,6 +89,11 @@ jobs:
           FACTORY_TASK_OUTPUT: ${{ env.FACTORY_TASK_PATH }}
         run: node "$FACTORY_RUNTIME/prepare-task.mjs"
 
+      - name: Require non-empty OpenAI credential before any model step
+        env:
+          FACTORY_OPENAI_KEY_PRESENT: ${{ secrets.OPENAI_API_KEY != '' }}
+        run: node "$FACTORY_RUNTIME/assert-openai-credential.mjs"
+
       - name: Create isolated setup, model, and verification identities
         run: |
           set -euo pipefail
