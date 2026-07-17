@@ -95,6 +95,9 @@ jobs:
           sudo useradd --create-home --shell /bin/bash --gid factorywork factorysetup
           sudo useradd --create-home --shell /bin/bash --gid factorywork factorycodex
           sudo useradd --create-home --shell /bin/bash --gid factorywork factoryverify
+          workspace_parent="$(dirname -- "$GITHUB_WORKSPACE")"
+          sudo chgrp factorywork "$workspace_parent"
+          sudo chmod g+x "$workspace_parent"
           sudo chgrp -R factorywork "$GITHUB_WORKSPACE"
           sudo chmod -R g+rwX "$GITHUB_WORKSPACE"
           sudo chmod -R g-w "$GITHUB_WORKSPACE/.git"
