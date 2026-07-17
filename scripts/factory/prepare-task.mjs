@@ -10,7 +10,7 @@ await main(async () => {
   const outputPath = process.env.FACTORY_TASK_OUTPUT ?? `${process.env.RUNNER_TEMP ?? "."}/factory-task.json`;
   const config = await loadConfig(process.env.FACTORY_CONFIG ?? ".ai-factory/project.json");
   const github = new GitHubApi();
-  const [issue, events] = await Promise.all([github.getIssue(issueNumber), github.listIssueEvents(issueNumber)]);
+  const [issue, events] = await Promise.all([github.getIssue(issueNumber), github.listIssueTimelineEvents(issueNumber)]);
   const buildEvents = events.filter((event) => event.event === "labeled" && event.label?.name === "ai:build");
   invariant(buildEvents.length > 0, "TASK_PROVENANCE_MISSING", "GitHub has no ai:build label event for this task");
   const task = validateTask(issue, config, actor, buildEvents.at(-1).actor?.login);

@@ -54,9 +54,35 @@ test("GitHub API retries transient read transport errors and honors bounded Retr
     return Response.json([{ id: 1 }]);
   });
 
-  assert.deepEqual(await api.listIssueEvents(12), [{ id: 1 }]);
+  assert.deepEqual(await api.listIssueTimelineEvents(12), [{ id: 1 }]);
   assert.deepEqual(waits, [1000, 10000]);
   assert.deepEqual(retries.map(({ status }) => status), [null, 429]);
+});
+
+test("GitHub API reads complete issue timeline provenance with authentication", async () => {
+  const requests = [];
+  const pages = [
+    Array.from({ length: 100 }, (_, index) => ({ id: index + 1, event: "commented" })),
+    [{ id: 101, event: "labeled", label: { name: "ai:build" }, actor: { login: "shanchaudary" } }],
+  ];
+  const { api } = client(async (url, options) => {
+    requests.push({ url, options });
+    return Response.json(pages.shift());
+  });
+
+  const events = await api.listIssueTimelineEvents(12);
+
+  assert.equal(events.length, 101);
+  assert.deepEqual(events.at(-1), { id: 101, event: "labeled", label: { name: "ai:build" }, actor: { login: "shanchaudary" } });
+  assert.deepEqual(requests.map(({ url }) => url), [
+    "https://api.github.com/repos/owner/repository/issues/12/timeline?per_page=100&page=1",
+    "https://api.github.com/repos/owner/repository/issues/12/timeline?per_page=100&page=2",
+  ]);
+  for (const { options } of requests) {
+    assert.equal(options.method, "GET");
+    assert.equal(options.headers.Authorization, "Bearer test-token");
+    assert.equal(options.headers.Accept, "application/vnd.github+json");
+  }
 });
 
 test("GitHub API never retries writes and bounds exhausted reads", async () => {
