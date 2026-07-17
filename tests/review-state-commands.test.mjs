@@ -8,7 +8,7 @@ import { validateReview } from "../scripts/factory/glm.mjs";
 import { prepareReviewBatches } from "../scripts/factory/review.mjs";
 import { attemptFromLabels, parseStateMarker, stateMarker, taskDigest } from "../scripts/factory/state.mjs";
 import { executeCommands } from "../scripts/factory/commands.mjs";
-import { isolatedUserShellArgs, run } from "../scripts/factory/lib.mjs";
+import { isolatedUserSudoArgs, run } from "../scripts/factory/lib.mjs";
 import { supervisionDisposition } from "../scripts/factory/supervision.mjs";
 
 const config = validateConfig({
@@ -119,14 +119,18 @@ test("project command runner stops on the first real failure and redacts secrets
   assert.doesNotMatch(report.commands[1].stderr, /super-secret-value/);
 });
 
-test("isolated project commands enter the exact checkout without evaluating its path", async () => {
+test("isolated project commands enter the exact checkout without runner shell injection or path evaluation", async () => {
   const root = await mkdtemp(join(tmpdir(), "factory-cwd-"));
   const checkout = join(root, "repo $(touch injected) with spaces");
   const sentinel = join(root, "injected");
+  const bashEnv = join(root, "runner-bash-env");
   await mkdir(checkout);
   await writeFile(join(checkout, "package-lock.json"), "{}\n");
+  await writeFile(bashEnv, `touch ${JSON.stringify(sentinel)}\ncd /\n`);
 
-  const result = await run("bash", isolatedUserShellArgs("pwd; test -f package-lock.json", checkout), { cwd: root });
+  const args = isolatedUserSudoArgs("pwd; test -f package-lock.json", "factorysetup", checkout);
+  assert.deepEqual(args.slice(0, 7), ["-n", "-u", "factorysetup", "-H", "-D", checkout, "--"]);
+  const result = await run(args[7], args.slice(8), { cwd: checkout, env: { ...process.env, BASH_ENV: bashEnv } });
 
   assert.equal(result.stdout.trim(), checkout);
   await assert.rejects(access(sentinel), (error) => error.code === "ENOENT");

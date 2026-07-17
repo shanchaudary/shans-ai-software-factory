@@ -135,26 +135,27 @@ export async function runShell(command, options = {}) {
   return run("bash", ["-euo", "pipefail", "-c", command], options);
 }
 
-export function isolatedUserShellArgs(command, cwd) {
+export function isolatedUserShellArgs(command) {
   invariant(typeof command === "string" && command.trim().length > 0, "INVALID_COMMAND", "Configured command must be a non-empty string");
-  invariant(typeof cwd === "string" && cwd.length > 0 && !cwd.includes("\0"), "INVALID_COMMAND_CWD", "Project command working directory must be a non-empty path");
   return [
     "-euo",
     "pipefail",
     "-c",
-    `cd -- "$1"
-umask 0002
+    `umask 0002
 export GIT_OPTIONAL_LOCKS=0
 ${command}`,
-    "factory-command",
-    resolve(cwd),
   ];
 }
 
-export async function runShellAsUser(command, user, options = {}) {
+export function isolatedUserSudoArgs(command, user, cwd) {
   invariant(["factorysetup", "factoryverify"].includes(user), "INVALID_COMMAND_USER", "Project commands may run only as an isolated factory setup or verification user");
+  invariant(typeof cwd === "string" && cwd.length > 0 && !cwd.includes("\0"), "INVALID_COMMAND_CWD", "Project command working directory must be a non-empty path");
+  return ["-n", "-u", user, "-H", "-D", resolve(cwd), "--", "env", "-u", "BASH_ENV", "bash", ...isolatedUserShellArgs(command)];
+}
+
+export async function runShellAsUser(command, user, options = {}) {
   const cwd = options.cwd ?? process.cwd();
-  return run("sudo", ["-n", "-u", user, "-H", "--", "bash", ...isolatedUserShellArgs(command, cwd)], options);
+  return run("sudo", isolatedUserSudoArgs(command, user, cwd), options);
 }
 
 export function formatError(error) {
