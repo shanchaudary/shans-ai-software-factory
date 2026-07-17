@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { createLinter } from "actionlint";
 import { validateConfig, HARD_PROTECTED_PATHS } from "../scripts/factory/config.mjs";
 import { validateTask } from "../scripts/factory/task.mjs";
@@ -84,4 +85,14 @@ test("task authorization requires open issue, allowed actor, build label, and on
   assert.throws(() => validateTask(issue({ labels: [{ name: "ai:build" }, { name: "ai:risk:black" }] }), config, "shanchaudary"), (error) => error.code === "BLACK_RISK_REJECTED");
   assert.throws(() => validateTask(issue(), config, "intruder"), (error) => error.code === "ACTOR_NOT_ALLOWED");
   assert.throws(() => validateTask(issue({ state: "closed" }), config, "shanchaudary"), (error) => error.code === "TASK_NOT_OPEN");
+});
+
+test("isolated model workflows grant only parent-directory traversal", async () => {
+  for (const file of ["reusable-implement.yml", "reusable-supervise.yml"]) {
+    const workflow = await readFile(new URL(`../.github/workflows/${file}`, import.meta.url), "utf8");
+    assert.match(workflow, /workspace_parent="\$\(dirname -- "\$GITHUB_WORKSPACE"\)"/);
+    assert.match(workflow, /sudo chgrp factorywork "\$workspace_parent"/);
+    assert.match(workflow, /sudo chmod g\+x "\$workspace_parent"/);
+    assert.doesNotMatch(workflow, /sudo chmod g\+[rw]+x "\$workspace_parent"/);
+  }
 });
