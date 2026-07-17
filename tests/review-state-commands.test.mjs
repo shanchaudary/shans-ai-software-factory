@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { validateConfig } from "../scripts/factory/config.mjs";
@@ -8,7 +8,7 @@ import { validateReview } from "../scripts/factory/glm.mjs";
 import { prepareReviewBatches } from "../scripts/factory/review.mjs";
 import { attemptFromLabels, parseStateMarker, stateMarker, taskDigest } from "../scripts/factory/state.mjs";
 import { executeCommands } from "../scripts/factory/commands.mjs";
-import { run } from "../scripts/factory/lib.mjs";
+import { isolatedUserShellArgs, run } from "../scripts/factory/lib.mjs";
 import { supervisionDisposition } from "../scripts/factory/supervision.mjs";
 
 const config = validateConfig({
@@ -117,4 +117,17 @@ test("project command runner stops on the first real failure and redacts secrets
   assert.equal(report.commands.length, 2);
   assert.equal(report.commands[1].exit_code, 7);
   assert.doesNotMatch(report.commands[1].stderr, /super-secret-value/);
+});
+
+test("isolated project commands enter the exact checkout without evaluating its path", async () => {
+  const root = await mkdtemp(join(tmpdir(), "factory-cwd-"));
+  const checkout = join(root, "repo $(touch injected) with spaces");
+  const sentinel = join(root, "injected");
+  await mkdir(checkout);
+  await writeFile(join(checkout, "package-lock.json"), "{}\n");
+
+  const result = await run("bash", isolatedUserShellArgs("pwd; test -f package-lock.json", checkout), { cwd: root });
+
+  assert.equal(result.stdout.trim(), checkout);
+  await assert.rejects(access(sentinel), (error) => error.code === "ENOENT");
 });
