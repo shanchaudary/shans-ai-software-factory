@@ -147,15 +147,15 @@ ${command}`,
   ];
 }
 
-export function isolatedUserSudoArgs(command, user, cwd) {
+export function isolatedUserSudoArgs(command, user) {
   invariant(["factorysetup", "factoryverify"].includes(user), "INVALID_COMMAND_USER", "Project commands may run only as an isolated factory setup or verification user");
-  invariant(typeof cwd === "string" && cwd.length > 0 && !cwd.includes("\0"), "INVALID_COMMAND_CWD", "Project command working directory must be a non-empty path");
-  return ["-n", "-u", user, "-H", "-D", resolve(cwd), "--", "env", "-u", "BASH_ENV", "bash", ...isolatedUserShellArgs(command)];
+  return ["-n", "-u", user, "-H", "--", "env", "-u", "BASH_ENV", "bash", ...isolatedUserShellArgs(command)];
 }
 
 export async function runShellAsUser(command, user, options = {}) {
   const cwd = options.cwd ?? process.cwd();
-  return run("sudo", isolatedUserSudoArgs(command, user, cwd), options);
+  invariant(typeof cwd === "string" && cwd.length > 0 && !cwd.includes("\0"), "INVALID_COMMAND_CWD", "Project command working directory must be a non-empty path");
+  return run("sudo", isolatedUserSudoArgs(command, user), { ...options, cwd: resolve(cwd) });
 }
 
 export function formatError(error) {

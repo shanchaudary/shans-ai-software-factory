@@ -128,9 +128,10 @@ test("isolated project commands enter the exact checkout without runner shell in
   await writeFile(join(checkout, "package-lock.json"), "{}\n");
   await writeFile(bashEnv, `touch ${JSON.stringify(sentinel)}\ncd /\n`);
 
-  const args = isolatedUserSudoArgs("pwd; test -f package-lock.json", "factorysetup", checkout);
-  assert.deepEqual(args.slice(0, 7), ["-n", "-u", "factorysetup", "-H", "-D", checkout, "--"]);
-  const result = await run(args[7], args.slice(8), { cwd: checkout, env: { ...process.env, BASH_ENV: bashEnv } });
+  const args = isolatedUserSudoArgs("pwd; test -f package-lock.json", "factorysetup");
+  assert.deepEqual(args.slice(0, 5), ["-n", "-u", "factorysetup", "-H", "--"]);
+  assert.equal(args.includes(checkout), false);
+  const result = await run(args[5], args.slice(6), { cwd: checkout, env: { ...process.env, BASH_ENV: bashEnv } });
 
   assert.equal(result.stdout.trim(), checkout);
   await assert.rejects(access(sentinel), (error) => error.code === "ENOENT");
