@@ -96,8 +96,11 @@ jobs:
           sudo useradd --create-home --shell /bin/bash --gid factorywork factorycodex
           sudo useradd --create-home --shell /bin/bash --gid factorywork factoryverify
           workspace_parent="$(dirname -- "$GITHUB_WORKSPACE")"
-          sudo chgrp factorywork "$workspace_parent"
-          sudo chmod g+x "$workspace_parent"
+          work_parent="$(dirname -- "$workspace_parent")"
+          runner_home="$(dirname -- "$work_parent")"
+          for ancestor in "$runner_home" "$work_parent" "$workspace_parent"; do
+            sudo setfacl -m u:factorysetup:--x,u:factorycodex:--x,u:factoryverify:--x "$ancestor"
+          done
           sudo chgrp -R factorywork "$GITHUB_WORKSPACE"
           sudo chmod -R g+rwX "$GITHUB_WORKSPACE"
           sudo chmod -R g-w "$GITHUB_WORKSPACE/.git"

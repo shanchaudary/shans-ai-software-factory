@@ -91,8 +91,10 @@ test("isolated model workflows grant only parent-directory traversal", async () 
   for (const file of ["reusable-implement.yml", "reusable-supervise.yml"]) {
     const workflow = await readFile(new URL(`../.github/workflows/${file}`, import.meta.url), "utf8");
     assert.match(workflow, /workspace_parent="\$\(dirname -- "\$GITHUB_WORKSPACE"\)"/);
-    assert.match(workflow, /sudo chgrp factorywork "\$workspace_parent"/);
-    assert.match(workflow, /sudo chmod g\+x "\$workspace_parent"/);
-    assert.doesNotMatch(workflow, /sudo chmod g\+[rw]+x "\$workspace_parent"/);
+    assert.match(workflow, /work_parent="\$\(dirname -- "\$workspace_parent"\)"/);
+    assert.match(workflow, /runner_home="\$\(dirname -- "\$work_parent"\)"/);
+    assert.match(workflow, /for ancestor in "\$runner_home" "\$work_parent" "\$workspace_parent"/);
+    assert.match(workflow, /setfacl -m u:factorysetup:--x,u:factorycodex:--x,u:factoryverify:--x "\$ancestor"/);
+    assert.doesNotMatch(workflow, /setfacl -m [^\n]*:[rw-]*[rw][rwx-]*/);
   }
 });
