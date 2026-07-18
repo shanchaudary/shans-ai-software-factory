@@ -111,6 +111,18 @@ jobs:
           sudo chmod -R g+rwX "$GITHUB_WORKSPACE"
           sudo chmod -R g-w "$GITHUB_WORKSPACE/.git"
           sudo find "$GITHUB_WORKSPACE" -path "$GITHUB_WORKSPACE/.git" -prune -o -type d -exec chmod g+s {} +
+          sudo find "$GITHUB_WORKSPACE" -path "$GITHUB_WORKSPACE/.git" -prune -o -type d -exec setfacl -m "g:factorywork:rwx,d:g:factorywork:rwx" {} +
+          permission_probe="$GITHUB_WORKSPACE/.factory-permission-probe"
+          sudo -n -u factorycodex -H -- env BASH_ENV=/dev/null bash --noprofile --norc -euo pipefail -c '
+            umask 0022
+            mkdir -- "$1"
+            : > "$1/model.trace"
+          ' factory-permission-probe "$permission_probe"
+          sudo -n -u factoryverify -H -- env BASH_ENV=/dev/null bash --noprofile --norc -euo pipefail -c '
+            printf "verified\n" >> "$1/model.trace"
+            rm -- "$1/model.trace"
+            rmdir -- "$1"
+          ' factory-permission-probe "$permission_probe"
 
       - name: Run project setup before model credentials exist
         env:

@@ -95,7 +95,25 @@ test("isolated model workflows grant only parent-directory traversal", async () 
     assert.match(workflow, /runner_home="\$\(dirname -- "\$work_parent"\)"/);
     assert.match(workflow, /for ancestor in "\$runner_home" "\$work_parent" "\$workspace_parent"/);
     assert.match(workflow, /setfacl -m u:factorysetup:--x,u:factorycodex:--x,u:factoryverify:--x "\$ancestor"/);
-    assert.doesNotMatch(workflow, /setfacl -m [^\n]*:[rw-]*[rw][rwx-]*/);
+    const ancestorAcl = workflow.split("\n").find((line) => line.includes('setfacl -m u:factorysetup:--x'));
+    assert.doesNotMatch(ancestorAcl, /factory(?:setup|codex|verify):[^,\s]*[rw]/);
+  }
+});
+
+test("isolated model workflows preserve verifier access to model-created artifacts", async () => {
+  for (const file of ["reusable-implement.yml", "reusable-supervise.yml"]) {
+    const workflow = await readFile(new URL(`../.github/workflows/${file}`, import.meta.url), "utf8");
+    const identity = workflow.indexOf("Create isolated setup, model, and verification identities");
+    const model = workflow.indexOf(file === "reusable-implement.yml" ? "Run pinned Codex implementation engine" : "Run pinned Codex repair engine");
+    const verify = workflow.indexOf("Run authoritative project verification", model);
+    const sharing = workflow.indexOf('setfacl -m "g:factorywork:rwx,d:g:factorywork:rwx"');
+    const probeWrite = workflow.indexOf('printf "verified\\n" >> "$1/model.trace"');
+
+    assert.ok(identity >= 0 && sharing > identity && probeWrite > sharing);
+    assert.ok(model > probeWrite && verify > model);
+    assert.match(workflow, /find "\$GITHUB_WORKSPACE" -path "\$GITHUB_WORKSPACE\/\.git" -prune -o -type d -exec setfacl/);
+    assert.match(workflow, /umask 0022[\s\S]*mkdir -- "\$1"[\s\S]*factoryverify[\s\S]*model\.trace/);
+    assert.match(workflow, /rm -- "\$1\/model\.trace"[\s\S]*rmdir -- "\$1"/);
   }
 });
 
