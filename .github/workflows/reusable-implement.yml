@@ -64,6 +64,10 @@ jobs:
           cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
           rm -rf .factory-source
 
+      - name: Resolve normalized trusted artifact directory
+        id: artifact_root
+        run: node "$FACTORY_RUNTIME/resolve-artifact-root.mjs"
+
       - name: Validate consumer contract
         id: config
         run: node "$FACTORY_RUNTIME/validate-config.mjs"
@@ -180,11 +184,11 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: |
-            ${{ github.workspace }}/../factory-tmp/factory.patch
-            ${{ github.workspace }}/../factory-tmp/factory-patch-manifest.json
-            ${{ github.workspace }}/../factory-tmp/factory-task.json
-            ${{ github.workspace }}/../factory-tmp/factory-setup-report.json
-            ${{ github.workspace }}/../factory-tmp/factory-verification-report.json
+            ${{ steps.artifact_root.outputs.root }}/factory.patch
+            ${{ steps.artifact_root.outputs.root }}/factory-patch-manifest.json
+            ${{ steps.artifact_root.outputs.root }}/factory-task.json
+            ${{ steps.artifact_root.outputs.root }}/factory-setup-report.json
+            ${{ steps.artifact_root.outputs.root }}/factory-verification-report.json
 
   publish:
     name: Validated branch and draft PR publication
@@ -231,11 +235,15 @@ jobs:
           cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
           rm -rf .factory-source
 
+      - name: Resolve normalized trusted artifact directory
+        id: artifact_root
+        run: node "$FACTORY_RUNTIME/resolve-artifact-root.mjs"
+
       - name: Download immutable implementation artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-implementation-${{ github.run_id }}
-          path: ${{ github.workspace }}/../factory-tmp/factory-artifact
+          path: ${{ steps.artifact_root.outputs.root }}/factory-artifact
 
       - name: Revalidate and apply patch in fresh publisher job
         env:

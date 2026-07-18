@@ -1,5 +1,5 @@
-import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, resolve, sep } from "node:path";
+import { appendFile, lstat, mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 
@@ -61,6 +61,21 @@ export function safeRepoPath(root, candidate) {
   const absolute = resolve(normalizedRoot, candidate);
   invariant(absolute === normalizedRoot || absolute.startsWith(`${normalizedRoot}${sep}`), "UNSAFE_PATH", `Path escapes repository: ${candidate}`);
   return absolute;
+}
+
+export async function resolveTrustedArtifactRoot(workspace, runtime) {
+  invariant(typeof workspace === "string" && isAbsolute(workspace), "INVALID_ARTIFACT_ROOT", "GITHUB_WORKSPACE must be an absolute path");
+  invariant(typeof runtime === "string" && isAbsolute(runtime), "INVALID_ARTIFACT_ROOT", "FACTORY_RUNTIME must be an absolute path");
+  const workspaceRoot = await realpath(workspace);
+  const runtimeRoot = await realpath(runtime);
+  const artifactRoot = dirname(runtimeRoot);
+  const expectedRoot = resolve(workspaceRoot, "..", "factory-tmp");
+  const artifactStat = await lstat(artifactRoot);
+  invariant(artifactStat.isDirectory() && !artifactStat.isSymbolicLink(), "INVALID_ARTIFACT_ROOT", "Factory artifact root must be a real directory");
+  invariant(artifactRoot === expectedRoot, "INVALID_ARTIFACT_ROOT", "Factory artifact root must be the normalized trusted workspace sibling");
+  invariant(relative(workspaceRoot, artifactRoot) === `..${sep}factory-tmp`, "INVALID_ARTIFACT_ROOT", "Factory artifact root must remain outside the model workspace");
+  invariant(!artifactRoot.split(sep).includes(".."), "INVALID_ARTIFACT_ROOT", "Factory artifact root must not contain relative path segments");
+  return artifactRoot;
 }
 
 export async function githubOutput(name, value) {
