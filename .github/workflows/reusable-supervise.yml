@@ -74,6 +74,10 @@ jobs:
           cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
           rm -rf .factory-source
 
+      - name: Resolve normalized trusted artifact directory
+        id: artifact_root
+        run: node "$FACTORY_RUNTIME/resolve-artifact-root.mjs"
+
       - name: Validate consumer contract
         id: config
         run: node "$FACTORY_RUNTIME/validate-config.mjs"
@@ -101,7 +105,7 @@ jobs:
           name: factory-context-${{ github.run_id }}
           if-no-files-found: error
           retention-days: 14
-          path: ${{ github.workspace }}/../factory-tmp/factory-supervision-context.json
+          path: ${{ steps.artifact_root.outputs.root }}/factory-supervision-context.json
 
       - name: Upload complete failed-CI evidence
         if: ${{ steps.resolve.outputs.action == 'repair-ci' || steps.resolve.outputs.action == 'block' }}
@@ -110,7 +114,7 @@ jobs:
           name: factory-ci-evidence-${{ github.run_id }}
           if-no-files-found: error
           retention-days: 14
-          path: ${{ github.workspace }}/../factory-tmp/factory-ci-evidence.json
+          path: ${{ steps.artifact_root.outputs.root }}/factory-ci-evidence.json
 
   review:
     name: Complete independent GLM review
@@ -168,11 +172,15 @@ jobs:
           install -D -m 0555 "$opencode_source" "$FACTORY_RUNTIME/bin/opencode"
           rm -rf .factory-source
 
+      - name: Resolve normalized trusted artifact directory
+        id: artifact_root
+        run: node "$FACTORY_RUNTIME/resolve-artifact-root.mjs"
+
       - name: Download immutable supervision context
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-context-${{ github.run_id }}
-          path: ${{ github.workspace }}/../factory-tmp/factory-context
+          path: ${{ steps.artifact_root.outputs.root }}/factory-context
 
       - name: Reject manual governance, config, binary, or submodule changes
         env:
@@ -214,7 +222,7 @@ jobs:
           name: factory-review-${{ github.run_id }}
           if-no-files-found: error
           retention-days: 14
-          path: ${{ github.workspace }}/../factory-tmp/factory-review-report.json
+          path: ${{ steps.artifact_root.outputs.root }}/factory-review-report.json
 
   repair_engineer:
     name: Isolated Codex repair
@@ -277,25 +285,29 @@ jobs:
           cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
           rm -rf .factory-source
 
+      - name: Resolve normalized trusted artifact directory
+        id: artifact_root
+        run: node "$FACTORY_RUNTIME/resolve-artifact-root.mjs"
+
       - name: Download immutable supervision context
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-context-${{ github.run_id }}
-          path: ${{ github.workspace }}/../factory-tmp/factory-context
+          path: ${{ steps.artifact_root.outputs.root }}/factory-context
 
       - name: Download complete CI evidence
         if: ${{ steps.mode.outputs.value == 'repair-ci' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-ci-evidence-${{ github.run_id }}
-          path: ${{ github.workspace }}/../factory-tmp/factory-evidence
+          path: ${{ steps.artifact_root.outputs.root }}/factory-evidence
 
       - name: Download complete GLM findings
         if: ${{ steps.mode.outputs.value == 'repair-review' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-review-${{ github.run_id }}
-          path: ${{ github.workspace }}/../factory-tmp/factory-review-result
+          path: ${{ steps.artifact_root.outputs.root }}/factory-review-result
 
       - name: Reject manual governance, config, binary, or submodule changes
         env:
@@ -412,10 +424,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: |
-            ${{ github.workspace }}/../factory-tmp/factory.patch
-            ${{ github.workspace }}/../factory-tmp/factory-patch-manifest.json
-            ${{ github.workspace }}/../factory-tmp/factory-setup-report.json
-            ${{ github.workspace }}/../factory-tmp/factory-verification-report.json
+            ${{ steps.artifact_root.outputs.root }}/factory.patch
+            ${{ steps.artifact_root.outputs.root }}/factory-patch-manifest.json
+            ${{ steps.artifact_root.outputs.root }}/factory-setup-report.json
+            ${{ steps.artifact_root.outputs.root }}/factory-verification-report.json
 
   publish_repair:
     name: Validated repair publication and CI redispatch
@@ -463,17 +475,21 @@ jobs:
           cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
           rm -rf .factory-source
 
+      - name: Resolve normalized trusted artifact directory
+        id: artifact_root
+        run: node "$FACTORY_RUNTIME/resolve-artifact-root.mjs"
+
       - name: Download immutable supervision context
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-context-${{ github.run_id }}
-          path: ${{ github.workspace }}/../factory-tmp/factory-context
+          path: ${{ steps.artifact_root.outputs.root }}/factory-context
 
       - name: Download immutable repair artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-repair-${{ github.run_id }}
-          path: ${{ github.workspace }}/../factory-tmp/factory-repair
+          path: ${{ steps.artifact_root.outputs.root }}/factory-repair
 
       - name: Revalidate and apply repair in fresh publisher job
         env:
@@ -531,16 +547,19 @@ jobs:
           mkdir -p "$FACTORY_RUNTIME"
           cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
           rm -rf .factory-source
+      - name: Resolve normalized trusted artifact directory
+        id: artifact_root
+        run: node "$FACTORY_RUNTIME/resolve-artifact-root.mjs"
       - name: Download supervision context
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-context-${{ github.run_id }}
-          path: ${{ github.workspace }}/../factory-tmp/factory-context
+          path: ${{ steps.artifact_root.outputs.root }}/factory-context
       - name: Download independent review
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-review-${{ github.run_id }}
-          path: ${{ github.workspace }}/../factory-tmp/factory-review-result
+          path: ${{ steps.artifact_root.outputs.root }}/factory-review-result
       - name: Publish evidence-backed ready state
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -593,11 +612,14 @@ jobs:
           mkdir -p "$FACTORY_RUNTIME"
           cp -R .factory-source/scripts/factory/. "$FACTORY_RUNTIME/"
           rm -rf .factory-source
+      - name: Resolve normalized trusted artifact directory
+        id: artifact_root
+        run: node "$FACTORY_RUNTIME/resolve-artifact-root.mjs"
       - name: Download supervision context
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: factory-context-${{ github.run_id }}
-          path: ${{ github.workspace }}/../factory-tmp/factory-context
+          path: ${{ steps.artifact_root.outputs.root }}/factory-context
       - name: Publish fail-closed state
         env:
           GITHUB_TOKEN: ${{ github.token }}
