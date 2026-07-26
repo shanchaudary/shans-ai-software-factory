@@ -22,6 +22,14 @@ test("extracts actionable Codex errors while redacting credentials and excluding
   assert.equal(lines.some((line) => line.includes("secret-bearer")), false);
 });
 
+test("escapes model-controlled HTML and comment delimiters before issue publication", () => {
+  const lines = extractFailureDiagnosticLines(`
+Running: CODEX_HOME=/tmp/codex codex exec
+Error: <!-- hidden --> <script>bad()</script> & unsafe
+`);
+  assert.deepEqual(lines, ["Error: &lt;!-- hidden --&gt; &lt;script&gt;bad()&lt;/script&gt; &amp; unsafe"]);
+});
+
 test("keeps a generic exit line only when no specific diagnosis exists", () => {
   const lines = extractFailureDiagnosticLines(`
 Running: CODEX_HOME=/tmp/codex codex exec
