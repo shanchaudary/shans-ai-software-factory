@@ -23,6 +23,13 @@ function stripControlSequences(value) {
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "");
 }
 
+function escapeIssueText(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
 function normalizeLine(value) {
   const withoutTimestamp = stripControlSequences(value)
     .replace(/^\s*\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s*/, "")
@@ -31,7 +38,7 @@ function normalizeLine(value) {
   const additionallyRedacted = redact(withoutTimestamp)
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}\b/gi, "Bearer [REDACTED]")
     .replace(/\bAuthorization:\s*[^\s]+(?:\s+[^\s]+)?/gi, "Authorization: [REDACTED]");
-  return additionallyRedacted.slice(0, MAX_LINE_LENGTH);
+  return escapeIssueText(additionallyRedacted).slice(0, MAX_LINE_LENGTH);
 }
 
 function relevantLogRegion(logText) {
