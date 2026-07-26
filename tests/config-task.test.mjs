@@ -56,10 +56,25 @@ test("workflow validation rejects runner context in job-level environment", asyn
 
 test("configuration expands hard security defaults and current models", () => {
   const config = validateConfig(rawConfig());
-  assert.equal(config.implementation.model, "gpt-5.6");
+  assert.equal(config.implementation.model, "gpt-5.6-sol");
+  assert.equal(config.implementation.reasoning_effort, "max");
   assert.equal(config.review.model, "glm-5.2");
   assert.equal(config.limits.max_repair_cycles, 3);
   for (const path of HARD_PROTECTED_PATHS) assert.ok(config.protected_paths.includes(path));
+});
+
+test("configuration accepts max reasoning and rejects unsupported effort", () => {
+  const maxConfig = validateConfig(rawConfig({
+    implementation: { model: "gpt-5.6-sol", reasoning_effort: "max" },
+  }));
+  assert.deepEqual(maxConfig.implementation, {
+    model: "gpt-5.6-sol",
+    reasoning_effort: "max",
+  });
+  assert.throws(
+    () => validateConfig(rawConfig({ implementation: { model: "gpt-5.6-sol", reasoning_effort: "ultra" } })),
+    (error) => error instanceof FactoryError && error.code === "INVALID_CONFIG",
+  );
 });
 
 test("configuration rejects unknown keys and placeholder commands", () => {
