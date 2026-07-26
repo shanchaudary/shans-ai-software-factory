@@ -267,6 +267,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      actions: read
       issues: write
     env:
       FACTORY_RUNTIME: ${{ github.workspace }}/../factory-tmp/factory-runtime
