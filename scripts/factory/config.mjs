@@ -35,8 +35,8 @@ const DEFAULT_REVIEW = Object.freeze({
 });
 
 const DEFAULT_IMPLEMENTATION = Object.freeze({
-  model: "gpt-5.6",
-  reasoning_effort: "high",
+  model: "gpt-5.6-sol",
+  reasoning_effort: "max",
 });
 
 function exactKeys(object, allowed, name) {
@@ -104,7 +104,7 @@ export function validateConfig(raw) {
   const implementationModel = rawImplementation.model ?? DEFAULT_IMPLEMENTATION.model;
   const implementationEffort = rawImplementation.reasoning_effort ?? DEFAULT_IMPLEMENTATION.reasoning_effort;
   invariant(typeof implementationModel === "string" && /^[A-Za-z0-9._-]+$/.test(implementationModel), "INVALID_CONFIG", "implementation.model is invalid");
-  invariant(["low", "medium", "high", "xhigh"].includes(implementationEffort), "INVALID_CONFIG", "implementation.reasoning_effort is invalid");
+  invariant(["low", "medium", "high", "xhigh", "max"].includes(implementationEffort), "INVALID_CONFIG", "implementation.reasoning_effort is invalid");
 
   return Object.freeze({
     schema_version: 1,
