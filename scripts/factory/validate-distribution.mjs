@@ -46,12 +46,13 @@ await main(async () => {
   }
 
   const scripts = (await filesBelow("scripts/factory")).filter((path) => path.endsWith(".mjs"));
-  const required = ["prepare-task.mjs", "validate-patch.mjs", "publish.mjs", "resolve-managed-pr.mjs", "supervision.mjs", "collect-ci-evidence.mjs", "prepare-review-batches.mjs", "opencode-glm.mjs", "glm-review.mjs", "resolve-artifact-root.mjs", "finalize.mjs"];
+  const required = ["prepare-task.mjs", "validate-patch.mjs", "publish.mjs", "resolve-managed-pr.mjs", "supervision.mjs", "collect-ci-evidence.mjs", "prepare-review-batches.mjs", "opencode-glm.mjs", "glm-review.mjs", "resolve-artifact-root.mjs", "failure-diagnostics.mjs", "finalize.mjs"];
   for (const name of required) invariant(scripts.some((path) => path.endsWith(`/${name}`)), "DISTRIBUTION_INCOMPLETE", `Missing runtime entry point ${name}`);
 
   const implement = await readFile(".github/workflows/reusable-implement.yml", "utf8");
   const supervise = await readFile(".github/workflows/reusable-supervise.yml", "utf8");
   invariant(implement.includes("permission-profile: \":workspace\"") && implement.includes("persist-credentials: false"), "SECURITY_REGRESSION", "Implementation model isolation is missing");
+  invariant(/report_failure:[\s\S]*?permissions:[\s\S]*?actions:\s*read[\s\S]*?issues:\s*write/.test(implement), "DISTRIBUTION_INCOMPLETE", "Fail-closed implementation reporting must have read-only Actions access for bounded diagnostics");
   invariant(supervise.includes("ZAI_API_KEY") && supervise.includes("REVIEW_COVERAGE_INCOMPLETE") === false, "DISTRIBUTION_INCOMPLETE", "Supervisor wiring is missing");
   invariant(supervise.includes("opencode-linux-x64-baseline/bin/opencode") && supervise.includes("test \"$version\" = \"1.18.2\"") && supervise.includes("factoryglm"), "SECURITY_REGRESSION", "Pinned OS-isolated OpenCode GLM transport is missing");
   invariant(supervise.includes("publish_repair:") && supervise.includes("Record human-gated ready state") && supervise.includes("Record fail-closed human intervention state"), "DISTRIBUTION_INCOMPLETE", "Supervisor state machine is incomplete");
